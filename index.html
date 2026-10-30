@@ -38,8 +38,6 @@
   .stats { display:flex; flex-wrap:wrap; gap:6px 22px; margin-bottom:10px;
     font-family: system-ui, sans-serif; font-size:.95rem; color:var(--muted); }
   .stats b { color:var(--ink); font-variant-numeric: tabular-nums; }
-  .stats button { padding:4px 12px; font:600 .9rem system-ui,sans-serif; color:var(--ink); background:var(--btn);
-    border:1px solid var(--line); border-radius:6px; cursor:pointer; }
   #wrap { background:var(--card); border:1px solid var(--line); border-radius:6px; }
   canvas { display:block; width:100%; height:240px; }
   #msg { min-height:1.4em; margin:8px 0; font-family:system-ui,sans-serif; font-size:.95rem; }
@@ -79,8 +77,6 @@
     <span>Bonnes réponses : <b id="sOk">0</b></span>
     <span>Réponses totales : <b id="sTot">0</b></span>
     <span>Réussite : <b id="sPct">0</b> %</span>
-    <span>Vitesse : <b id="sRate">0,0</b> notes/s</span>
-    <button id="restart" type="button">Redémarrer</button>
   </div>
   <div id="wrap"><canvas id="cv"></canvas></div>
   <div id="msg"></div>
@@ -134,7 +130,7 @@ const READ_X = 150;             // abscisse de la ligne rouge
 const SPEED = 110;              // px/s
 const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
 let W = 600, CH = 240, notes = [], offset = 0, waiting = false;
-let stats = { ok:0, total:0 }, flashUntil = 0, bindings = {}, last = 0, elapsed = 0, started = false;
+let stats = { ok:0, total:0 }, flashUntil = 0, bindings = {}, last = 0;
 
 /* Note aléatoire naturelle entre C2 et G5. */
 function randomNote() {
@@ -234,8 +230,6 @@ function drawNote(x, idx) {
 function update(dt) {
   if (offset > 0) offset = Math.max(0, offset - SPEED * dt);
   waiting = offset === 0;
-  if (waiting) started = true;              // le chrono démarre quand la 1re note atteint la ligne rouge
-  if (started) elapsed += dt;               // dt est plafonné : un onglet en veille ne compte pas
 }
 
 function render() {
@@ -277,22 +271,6 @@ function updateStats() {
   document.getElementById('sTot').textContent = stats.total;
   document.getElementById('sPct').textContent = stats.total ? Math.round(100 * stats.ok / stats.total) : 0;
 }
-
-/* Vitesse = bonnes réponses / temps écoulé (1 décimale), mise à jour en continu. */
-let lastRate = '';
-function updateRate() {
-  const txt = (elapsed > 0 ? stats.ok / elapsed : 0).toFixed(1).replace('.', ',');
-  if (txt !== lastRate) { lastRate = txt; document.getElementById('sRate').textContent = txt; }
-}
-
-/* Remet tout à zéro : statistiques, chrono et file de notes. */
-function restart() {
-  stats = { ok:0, total:0 }; elapsed = 0; started = false;
-  notes = []; fillQueue(); offset = SPACING * 2; waiting = false;
-  document.getElementById('msg').textContent = '';
-  updateStats(); updateRate();
-}
-document.getElementById('restart').addEventListener('click', e => { restart(); e.currentTarget.blur(); });
 
 /* ---------- Raccourcis clavier : sauvegarde / restauration ---------- */
 function saveBindings() {
@@ -372,7 +350,7 @@ function resize() {
 window.addEventListener('resize', resize);
 function frame(t) {
   const dt = Math.min(0.05, (t - last) / 1000); last = t;
-  update(dt); updateRate(); render();
+  update(dt); render();
   requestAnimationFrame(frame);
 }
 
