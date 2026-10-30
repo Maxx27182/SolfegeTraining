@@ -53,6 +53,10 @@
     border:1px solid var(--line); border-radius:6px; text-transform:uppercase; }
   button:focus-visible, input:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
   .hint { margin-top:8px; font:.82rem system-ui,sans-serif; color:var(--muted); }
+  .midi { display:flex; flex-wrap:wrap; align-items:center; gap:6px 12px; margin-bottom:10px; font:.9rem system-ui,sans-serif; color:var(--muted); }
+  .midi button { padding:4px 12px; font:600 .9rem system-ui,sans-serif; color:var(--ink); background:var(--btn);
+    border:1px solid var(--line); border-radius:6px; cursor:pointer; }
+  .midi label { display:flex; align-items:center; gap:4px; }
   /* Clavier 2 octaves (visible en paysage uniquement) */
   #kb { display:none; position:relative; height:104px; user-select:none; -webkit-user-select:none; touch-action:manipulation; }
   .wk { position:absolute; top:0; bottom:0; box-sizing:border-box; background:#fffdf8; border:1px solid #1d1a16;
@@ -82,6 +86,7 @@
     <span>Vitesse : <b id="sRate">0,0</b> notes/s · <b id="sPace">–</b> s/note</span>
     <button id="restart" type="button">Redémarrer</button>
   </div>
+  <div class="midi"><button id="midiBtn" type="button">Connecter le piano (MIDI)</button><span id="midiStatus">Aucun piano connecté</span><label><input type="checkbox" id="strictOct" checked> Octave exacte</label></div>
   <div id="wrap"><canvas id="cv"></canvas></div>
   <div id="msg"></div>
   <div id="pad"></div>
@@ -109,12 +114,12 @@ function noteToIndex(name) {
 let H = 7;                    // hauteur d'un demi-pas (ligne -> interligne) en px
 let S = 2 * H;                // distance entre deux lignes de portée
 const GAP = 4;                  // demi-pas entre C4 et la 1re ligne de chaque portée
-let Y_C4 = 16.5 * H;          // ordonnée du Do central (axe entre les deux portées)
+let Y_C4 = 17.5 * H;          // ordonnée du Do central (axe entre les deux portées)
 const IDX_C4 = noteToIndex('C4');
 const TREBLE_LINES = ['E4','G4','B4','D5','F5'].map(noteToIndex);
 const BASS_LINES   = ['G2','B2','D3','F3','A3'].map(noteToIndex);
 const TREBLE_MID = noteToIndex('B4'), BASS_MID = noteToIndex('D3');
-const MIN_IDX = noteToIndex('C2'), MAX_IDX = noteToIndex('G5');
+const MIN_IDX = noteToIndex('C2'), MAX_IDX = noteToIndex('B5');
 
 /* Unique source de vérité verticale : degré -> ordonnée en pixels.
    - degrés au-dessus de C4 : échelle ancrée sur la portée de sol (E4 = C4 + GAP demi-pas)
@@ -255,11 +260,13 @@ function render() {
   ctx.beginPath(); ctx.moveTo(READ_X, noteToY(MAX_IDX + 3)); ctx.lineTo(READ_X, noteToY(MIN_IDX - 2)); ctx.stroke();
 }
 
-function checkAnswer(letter) {
+function checkAnswer(letter, midi) {
   if (!waiting) return;                       // pas de réponse tant que la note n'est pas arrêtée
   stats.total++;
   const msg = document.getElementById('msg');
-  if (letter === notes[0].letter) {
+  // Avec un piano MIDI et l'option "octave exacte", le numéro de note doit aussi correspondre
+  const wrongOct = midi !== undefined && document.getElementById('strictOct').checked && midi !== indexToMidi(notes[0].idx);
+  if (letter === notes[0].letter && !wrongOct) {
     stats.ok++;
     notes.shift(); fillQueue();               // note retirée, nouvelle note à droite
     offset = SPACING;                         // le défilement reprend
@@ -267,7 +274,7 @@ function checkAnswer(letter) {
   } else {
     flashUntil = performance.now() + 250;     // reste arrêté, attend la bonne réponse
     msg.style.color = 'var(--accent)';
-    msg.textContent = FR[letter] + ' n’est pas la bonne réponse, réessayez.';
+    msg.textContent = wrongOct && letter === notes[0].letter ? 'Bonne note, mais pas la bonne octave.' : FR[letter] + ' n’est pas la bonne réponse, réessayez.';
   }
   updateStats();
 }
@@ -364,12 +371,49 @@ document.addEventListener('keydown', e => {
   if (l) { e.preventDefault(); checkAnswer(l); }
 });
 
+/* ---------- Piano MIDI (Web MIDI API) ----------
+   Un piano numérique envoie des messages MIDI : "note on" = 0x90, puis numéro de note
+   (C4 = 60) et vélocité. On convertit ce numéro en note de la partition. */
+const PC_TO_LETTER = { 0:'C', 2:'D', 4:'E', 5:'F', 7:'G', 9:'A', 11:'B' };   // touches blanches
+let midiAccess = null;
+
+/* Numéro MIDI d'un degré diatonique (ex. C4 -> 60). */
+function indexToMidi(idx) { return 12 * (Math.floor(idx / 7) + 1) + [0, 2, 4, 5, 7, 9, 11][idx % 7]; }
+
+function midiStatus(t) { document.getElementById('midiStatus').textContent = t; }
+
+function onMidiMessage(ev) {
+  const st = ev.data[0], note = ev.data[1], vel = ev.data[2];
+  if ((st & 0xF0) !== 0x90 || vel === 0) return;       // seulement les "note on"
+  const letter = PC_TO_LETTER[note % 12];
+  if (!letter) return;                                  // touche noire : ignorée
+  checkAnswer(letter, note);
+}
+
+function refreshMidiInputs() {
+  const names = [];
+  midiAccess.inputs.forEach(inp => { inp.onmidimessage = onMidiMessage; names.push(inp.name); });
+  midiStatus(names.length ? 'Piano connecté : ' + names.join(', ') : 'Aucun piano détecté');
+}
+
+async function connectMidi() {
+  if (!navigator.requestMIDIAccess) { midiStatus('Web MIDI indisponible (utilisez Chrome sur Android)'); return; }
+  try {
+    midiAccess = await navigator.requestMIDIAccess();
+    midiAccess.onstatechange = refreshMidiInputs;       // branchement / débranchement à chaud
+    refreshMidiInputs();
+  } catch (e) { midiStatus('Accès MIDI refusé'); }
+}
+document.getElementById('midiBtn').addEventListener('click', connectMidi);
+// Reconnexion automatique si la permission a déjà été accordée
+try { navigator.permissions.query({ name: 'midi' }).then(p => { if (p.state === 'granted') connectMidi(); }).catch(() => {}); } catch (e) {}
+
 /* ---------- Canvas HiDPI + boucle ---------- */
 function resize() {
   const dpr = window.devicePixelRatio || 1;
   // Échelle : en paysage sur écran bas, la partition est réduite pour laisser la place au clavier
   H = (matchMedia('(orientation: landscape)').matches && window.innerHeight < 520) ? 5 : 7;
-  S = 2 * H; Y_C4 = 16.5 * H; CH = Math.round(35 * H);
+  S = 2 * H; Y_C4 = 17.5 * H; CH = Math.round(36 * H);
   cv.style.height = CH + 'px';
   W = cv.clientWidth;
   cv.width = W * dpr; cv.height = CH * dpr;
