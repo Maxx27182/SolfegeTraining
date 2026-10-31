@@ -86,7 +86,7 @@
     <span>Vitesse : <b id="sRate">0,0</b> notes/s · <b id="sPace">–</b> s/note</span>
     <button id="restart" type="button">Redémarrer</button>
   </div>
-  <div class="midi"><button id="midiBtn" type="button">Connecter le piano (MIDI)</button><span id="midiStatus">Aucun piano connecté</span><label><input type="checkbox" id="strictOct" checked> Octave exacte</label></div>
+  <div class="midi"><button id="midiBtn" type="button">Connecter le piano (MIDI)</button><span id="midiStatus">Aucun piano connecté</span><label><input type="checkbox" id="sound" checked> Son</label><label><input type="checkbox" id="strictOct" checked> Octave exacte</label></div>
   <div id="wrap"><canvas id="cv"></canvas></div>
   <div id="msg"></div>
   <div id="pad"></div>
@@ -147,7 +147,7 @@ function randomNote() {
   return { idx, letter: LETTERS[idx % 7] };
 }
 function fillQueue() {
-  const needed = Math.ceil((W - READ_X) / SPACING) + 2;
+  const needed = Math.max(3, Math.ceil((W - READ_X - offset) / SPACING) + 2);
   while (notes.length < needed) notes.push(randomNote());
 }
 
@@ -237,7 +237,9 @@ function drawNote(x, idx) {
 /* ---------- Logique ---------- */
 /* Fait défiler les notes ; s'arrête quand la 1re note atteint la ligne rouge. */
 function update(dt) {
-  if (offset > 0) offset = Math.max(0, offset - SPEED * dt);
+  fillQueue();                              // la file reste toujours assez remplie à droite
+  // Les notes défilent à vitesse constante ; elles rattrapent plus vite si on a beaucoup anticipé
+  if (offset > 0) offset = Math.max(0, offset - (SPEED + Math.max(0, offset - 2 * SPACING) * 2) * dt);
   waiting = offset === 0;
   if (waiting) started = true;              // le chrono démarre quand la 1re note atteint la ligne rouge
   if (started) elapsed += dt;               // dt est plafonné : un onglet en veille ne compte pas
@@ -261,7 +263,8 @@ function render() {
 }
 
 function checkAnswer(letter, midi) {
-  if (!waiting) return;                       // pas de réponse tant que la note n'est pas arrêtée
+  if (READ_X + offset > W) return;          // la note doit être visible ; on peut répondre en avance
+  started = true;                           // le chrono démarre à la première réponse (ou à l'arrêt)
   stats.total++;
   const msg = document.getElementById('msg');
   // Avec un piano MIDI et l'option "octave exacte", le numéro de note doit aussi correspondre
@@ -269,7 +272,7 @@ function checkAnswer(letter, midi) {
   if (letter === notes[0].letter && !wrongOct) {
     stats.ok++;
     notes.shift(); fillQueue();               // note retirée, nouvelle note à droite
-    offset = SPACING;                         // le défilement reprend
+    offset += SPACING;                         // le défilement reprend
     msg.textContent = ''; 
   } else {
     flashUntil = performance.now() + 250;     // reste arrêté, attend la bonne réponse
@@ -326,7 +329,7 @@ function buildPad() {
   LETTERS.forEach(l => {
     const cell = document.createElement('div'); cell.className = 'cell';
     const btn = document.createElement('button'); btn.textContent = FR[l];
-    btn.addEventListener('click', () => checkAnswer(l));
+    btn.addEventListener('click', () => tap(l, 4));
     const inp = document.createElement('input');
     inp.maxLength = 1; inp.value = bindings[l]; inp.setAttribute('aria-label', 'Touche pour ' + FR[l]);
     inp.addEventListener('focus', () => inp.select());
@@ -349,7 +352,7 @@ function buildKeyboard() {
     el.style.left = (i * w) + '%'; el.style.width = w + '%';
     el.innerHTML = '<span>' + FR[l] + '<sub>' + (i < 7 ? 3 : 4) + '</sub></span><small></small>';
     (kbLabels[l] = kbLabels[l] || []).push(el.lastChild);
-    el.addEventListener('pointerdown', e => { e.preventDefault(); checkAnswer(l); });
+    el.addEventListener('pointerdown', e => { e.preventDefault(); tap(l, i < 7 ? 3 : 4); });
     kb.appendChild(el);
     if (l !== 'E' && l !== 'B') {            // touche noire entre deux touches blanches voisines
       const bk = document.createElement('div'); bk.className = 'bk';
@@ -368,8 +371,35 @@ document.addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT' || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
   const k = e.key.toUpperCase();
   const l = LETTERS.find(x => bindings[x] === k);
-  if (l) { e.preventDefault(); checkAnswer(l); }
+  if (l) { e.preventDefault(); tap(l, 4); }
 });
+
+/* ---------- Son (Web Audio) : petit synthé de type piano ---------- */
+let audioCtx = null;
+function playNote(midi) {
+  if (!document.getElementById('sound').checked) return;
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    const t = audioCtx.currentTime, f = 440 * Math.pow(2, (midi - 69) / 12);
+    const env = audioCtx.createGain();                      // enveloppe : attaque courte, décroissance
+    env.gain.setValueAtTime(0.0001, t);
+    env.gain.exponentialRampToValueAtTime(0.3, t + 0.01);
+    env.gain.exponentialRampToValueAtTime(0.0001, t + 1.4);
+    env.connect(audioCtx.destination);
+    [[f, 'triangle', 1], [f * 2, 'sine', 0.3], [f * 3, 'sine', 0.1]].forEach(p => {  // fondamentale + harmoniques
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.type = p[1]; o.frequency.value = p[0]; g.gain.value = p[2];
+      o.connect(g); g.connect(env); o.start(t); o.stop(t + 1.5);
+    });
+  } catch (e) {}
+}
+/* Réponse à l'écran ou au clavier : joue la note (octave donnée) puis la vérifie.
+   Les notes venant du piano MIDI ne sonnent pas ici : le piano joue déjà lui-même. */
+function tap(letter, octave) {
+  playNote(indexToMidi(octave * 7 + LETTERS.indexOf(letter)));
+  checkAnswer(letter);
+}
 
 /* ---------- Piano MIDI (Web MIDI API) ----------
    Un piano numérique envoie des messages MIDI : "note on" = 0x90, puis numéro de note
