@@ -4,31 +4,19 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="manifest" href="manifest.webmanifest">
-<meta name="theme-color" content="#17150f">
+<meta name="theme-color" content="#ffffff">
 <meta name="mobile-web-app-capable" content="yes">
 <link rel="icon" href="icon-192.png">
 <title>Lecture piano – double portée</title>
 <style>
   /* ---------- Jetons de couleur (clair / sombre) ---------- */
   :root {
-    --bg:#f3efe6; --card:#fffdf8; --ink:#1d1a16; --muted:#6d655a;
-    --line:#d8d0c0; --accent:#d62828; --ok:#2a7a3b; --btn:#ece5d6;
+    --bg:#ffffff; --card:#ffffff; --ink:#000000; --muted:#666666;
+    --line:#d9d9d9; --accent:#d62828; --ok:#2a7a3b; --btn:#f0f0f0;
     color-scheme: light;
     box-sizing: border-box;
     padding-top: env(safe-area-inset-top, 0px);
     padding-bottom: env(safe-area-inset-bottom, 0px);
-  }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      --bg:#17150f; --card:#221f17; --ink:#f1ead8; --muted:#a39a86;
-      --line:#3a3528; --accent:#ff5a5a; --ok:#6fcf86; --btn:#2e2a20;
-      color-scheme: dark;
-    }
-  }
-  :root[data-theme="dark"] {
-    --bg:#17150f; --card:#221f17; --ink:#f1ead8; --muted:#a39a86;
-    --line:#3a3528; --accent:#ff5a5a; --ok:#6fcf86; --btn:#2e2a20;
-    color-scheme: dark;
   }
   html { scroll-padding-top: env(safe-area-inset-top, 0px); }
   body { margin:0; background:var(--bg); color:var(--ink);
@@ -59,14 +47,14 @@
   .midi label { display:flex; align-items:center; gap:4px; }
   /* Clavier 2 octaves (visible en paysage uniquement) */
   #kb { display:none; position:relative; height:104px; user-select:none; -webkit-user-select:none; touch-action:manipulation; }
-  .wk { position:absolute; top:0; bottom:0; box-sizing:border-box; background:#fffdf8; border:1px solid #1d1a16;
+  .wk { position:absolute; top:0; bottom:0; box-sizing:border-box; background:#ffffff; border:1px solid #000;
     border-radius:0 0 5px 5px; display:flex; flex-direction:column; justify-content:flex-end; align-items:center;
     padding-bottom:5px; color:#1d1a16; font:600 .72rem system-ui,sans-serif; cursor:pointer; }
   .wk small { color:#6d655a; font-weight:500; min-height:1em; }
-  .wk:active { background:#e6dcc4; }
+  .wk:active { background:#e4e4e4; }
   .wk span { font-size:1.05rem; }
   .wk sub { font-size:.6rem; font-weight:500; color:#6d655a; margin-left:1px; }
-  .bk { position:absolute; top:0; height:62%; background:#1d1a16; border-radius:0 0 4px 4px; z-index:2; }
+  .bk { position:absolute; top:0; height:62%; background:#000; border-radius:0 0 4px 4px; z-index:2; }
   @media (orientation: landscape) {
     main { padding-top:8px; padding-bottom:12px; }
     h1, .hint, #pad { display:none; }
@@ -375,23 +363,46 @@ document.addEventListener('keydown', e => {
 });
 
 /* ---------- Son (Web Audio) : petit synthé de type piano ---------- */
-let audioCtx = null;
+let audioCtx = null, masterBus = null;
 function playNote(midi) {
   if (!document.getElementById('sound').checked) return;
   try {
-    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-    if (audioCtx.state === 'suspended') audioCtx.resume();
-    const t = audioCtx.currentTime, f = 440 * Math.pow(2, (midi - 69) / 12);
-    const env = audioCtx.createGain();                      // enveloppe : attaque courte, décroissance
-    env.gain.setValueAtTime(0.0001, t);
-    env.gain.exponentialRampToValueAtTime(0.3, t + 0.01);
-    env.gain.exponentialRampToValueAtTime(0.0001, t + 1.4);
-    env.connect(audioCtx.destination);
-    [[f, 'triangle', 1], [f * 2, 'sine', 0.3], [f * 3, 'sine', 0.1]].forEach(p => {  // fondamentale + harmoniques
-      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-      o.type = p[1]; o.frequency.value = p[0]; g.gain.value = p[2];
-      o.connect(g); g.connect(env); o.start(t); o.stop(t + 1.5);
-    });
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      masterBus = audioCtx.createDynamicsCompressor();     // limiteur doux : évite la saturation
+      masterBus.connect(audioCtx.destination);
+    }
+    const ac = audioCtx;
+    if (ac.state === 'suspended') ac.resume();
+    const t = ac.currentTime, f = 440 * Math.pow(2, (midi - 69) / 12);
+    const dur = Math.max(1.5, 4.2 - (midi - 36) * 0.05);   // les graves résonnent plus longtemps
+    // Sortie : filtre passe-bas (timbre plus brillant dans l'aigu) puis volume
+    const out = ac.createGain(); out.gain.value = 0.2;
+    const lp = ac.createBiquadFilter(); lp.type = 'lowpass';
+    lp.frequency.value = Math.min(14000, 1500 + f * 10); lp.Q.value = 0.5;
+    lp.connect(out); out.connect(masterBus);
+    // Partiels : légèrement inharmoniques (cordes raides), chacun avec sa propre extinction
+    for (let n = 1; n <= 8; n++) {
+      const fn = f * n * Math.sqrt(1 + 0.0003 * n * n);
+      if (fn > 15000) break;
+      const amp = Math.pow(n, -1.15) * (n === 2 ? 1.2 : 1);        // spectre décroissant
+      const tau = (dur / 3) / (1 + 0.45 * (n - 1));                  // les aigus s'éteignent plus vite
+      [-1, 1].forEach(side => {                                      // deux cordes légèrement désaccordées
+        const o = ac.createOscillator(), g = ac.createGain();
+        o.type = 'sine'; o.frequency.value = fn; o.detune.value = side * (0.8 + n * 0.15);
+        g.gain.setValueAtTime(0, t);
+        g.gain.linearRampToValueAtTime(amp * 0.5, t + 0.004);        // attaque quasi instantanée
+        g.gain.setTargetAtTime(0, t + 0.004, tau);                   // décroissance exponentielle
+        o.connect(g); g.connect(lp); o.start(t); o.stop(t + tau * 5 + 0.05);
+      });
+    }
+    // Bruit du marteau : très court impact filtré
+    const len = Math.floor(ac.sampleRate * 0.04), nb = ac.createBuffer(1, len, ac.sampleRate), d = nb.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3);
+    const ns = ac.createBufferSource(); ns.buffer = nb;
+    const nf = ac.createBiquadFilter(); nf.type = 'bandpass'; nf.frequency.value = Math.min(4000, f * 3 + 300); nf.Q.value = 0.8;
+    const ng = ac.createGain(); ng.gain.value = 0.35;
+    ns.connect(nf); nf.connect(ng); ng.connect(out); ns.start(t);
   } catch (e) {}
 }
 /* Réponse à l'écran ou au clavier : joue la note (octave donnée) puis la vérifie.
