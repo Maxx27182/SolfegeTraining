@@ -255,14 +255,14 @@ function drawLedgerLines(x, idx) {
 }
 
 /* ---------- Note : lignes supplémentaires + tête + hampe ---------- */
-function drawNote(x, idx, kind) {
+function drawNote(x, idx, kind, noStem) {
   kind = kind || 'q';                          // w = ronde, h = blanche, q = noire, e = croche
   const y = noteToY(idx);
   drawLedgerLines(x, idx);
   const rx = 1.35*H, ry = 0.95*H;
   ctx.beginPath(); ctx.ellipse(x, y, rx, ry, -0.35, 0, Math.PI * 2);
   if (kind === 'w' || kind === 'h') { ctx.lineWidth = 1.8; ctx.stroke(); } else ctx.fill();   // tête creuse : ronde / blanche
-  if (kind === 'w') return;                    // la ronde n'a pas de hampe
+  if (kind === 'w' || noStem) return;                    // la ronde n'a pas de hampe
   // Règle simplifiée : au-dessus de la ligne médiane de sa portée -> hampe vers le bas
   const down = idx >= (idx >= IDX_C4 ? TREBLE_MID : BASS_MID);
   const sx = down ? x - rx + 1 : x + rx - 1, ye = down ? y + 7*H : y - 7*H;
@@ -596,6 +596,36 @@ function midiToPos(m) {
   const pc = m % 12, o = Math.floor(m / 12) - 1;
   return { idx: o * 7 + [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6][pc], sharp: [1, 3, 6, 8, 10].includes(pc) };
 }
+/* Accord : plusieurs notes simultanées (même portée ou les deux), une seule hampe commune.
+   Les secondes (notes voisines) sont décalées de l'autre côté de la hampe. */
+function drawChord(x, midis, col, kind) {
+  const ps = midis.map(m => Object.assign({ m }, midiToPos(m))).sort((a, b) => a.idx - b.idx);
+  const rx = 1.35 * H, mean = ps.reduce((a, q) => a + q.idx, 0) / ps.length;
+  const down = mean >= (mean >= IDX_C4 ? TREBLE_MID : BASS_MID);
+  let prev = null, shifted = false, nSharp = 0;
+  setInk(col);
+  ps.forEach(q => {
+    shifted = !!prev && q.idx - prev.idx <= 1 && !shifted;
+    const dx = shifted ? (down ? -2 * rx + 2 : 2 * rx - 2) : 0;
+    drawNote(x + dx, q.idx, kind, true);                     // têtes seulement
+    if (q.sharp) {                                           // dièses décalés pour ne pas se chevaucher
+      ctx.font = (3.4 * H) + 'px serif';
+      ctx.fillText('\u266F', x + Math.min(dx, 0) - 4.2 * H - (nSharp++ % 2) * 2.2 * H, noteToY(q.idx) + 1.1 * H);
+    }
+    prev = q;
+  });
+  if (kind === 'w') return;                                  // pas de hampe pour la ronde
+  const lo = noteToY(ps[0].idx), hi = noteToY(ps[ps.length - 1].idx);   // lo = note la plus grave (y grand)
+  const sx = down ? x - rx + 1 : x + rx - 1, ys = down ? hi : lo, ye = down ? lo + 7 * H : hi - 7 * H;
+  ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(sx, ys); ctx.lineTo(sx, ye); ctx.stroke();
+  if (kind === 'e') {                                        // crochet de la croche
+    const d = down ? -1 : 1;
+    ctx.lineWidth = 2.4; ctx.beginPath(); ctx.moveTo(sx, ye);
+    ctx.bezierCurveTo(sx + 1.5 * H, ye + d * 1.5 * H, sx + 2.6 * H, ye + d * 3 * H, sx + 1.6 * H, ye + d * 5 * H);
+    ctx.stroke();
+  }
+}
+
 /* Durée en temps -> forme de la note (ronde 4, blanche 2, noire 1, croche 0,5) */
 function durKind(beats) {
   if (!$('showDur').checked) return 'q';
@@ -608,10 +638,13 @@ function drawMidiNote(x, midi, col, kind) {
 
 function renderSong(ink, red) {
   if (mode === 'record') {                                // les dernières notes jouées, la plus récente à droite
-    recNotes.forEach((n, i) => {
-      const x = W - 40 - (recNotes.length - 1 - i) * 56; if (x <= 100) return;
-      const d = openN[n.midi] === n ? performance.now() - t0rec - n.t : n.d;      // note encore tenue : durée en cours
-      drawMidiNote(x, n.midi, ink, durKind(d * $('bpm').value / 60000));
+    // Notes jouées à moins de 100 ms d'écart = même accord (même colonne)
+    const groups = [];
+    recNotes.forEach(n => { const g = groups[groups.length - 1]; if (g && n.t - g.t <= 100) g.notes.push(n); else groups.push({ t: n.t, notes: [n] }); });
+    groups.forEach((g, i) => {
+      const x = W - 40 - (groups.length - 1 - i) * 56; if (x <= 100) return;
+      const d = Math.max(...g.notes.map(n => openN[n.midi] === n ? performance.now() - t0rec - n.t : n.d));   // note tenue : durée en cours
+      drawChord(x, g.notes.map(n => n.midi), ink, durKind(d * $('bpm').value / 60000));
     });
     return;
   }
@@ -625,7 +658,7 @@ function renderSong(ink, red) {
   }
   pr.steps.forEach(s => {
     const x = px(s.tick); if (x < 90 || x > W + 20) return;
-    s.midis.forEach((m, j) => drawMidiNote(x, m, s.done ? '#2a9d4a' : s.missed ? red : ink, durKind(s.durs[j] / pr.tpq)));
+    drawChord(x, s.midis, s.done ? '#2a9d4a' : s.missed ? red : ink, durKind(Math.max(...s.durs) / pr.tpq));
   });
   ctx.strokeStyle = red; ctx.lineWidth = 2.5;
   ctx.beginPath(); ctx.moveTo(READ_X, noteToY(MAX_IDX + 3)); ctx.lineTo(READ_X, noteToY(MIN_IDX - 2)); ctx.stroke();
