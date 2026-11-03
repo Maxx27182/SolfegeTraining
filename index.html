@@ -68,6 +68,7 @@
   body:not([data-mode="dictee"]) .dict-only, body:not([data-mode="dictee"]) #pad { display:none; }
   body:not([data-mode="record"]) .rec-only, body:not([data-mode="practice"]) .prac-only { display:none; }
   body:not([data-mode="dictee"]) #kb { display:block; height:auto; }
+  .hide-names .wk span, .hide-names .wk small { visibility:hidden; }
   #kb { overflow-x:auto; } #kbi { position:relative; height:104px; }
   /* Clavier 2 octaves (visible en paysage uniquement) */
   #kb { display:none; position:relative; height:104px; user-select:none; -webkit-user-select:none; touch-action:manipulation; }
@@ -121,6 +122,8 @@
   <div class="row">Volume du clac <input type="range" id="metVol" min="0" max="100" value="60"></div>
   <div class="row">Son du clac <select id="metSound"><option value="bois">Bois</option><option value="clic">Clic</option><option value="cloche">Cloche</option><option value="tic">Tic</option><option value="basse">Basse</option></select></div>
   <div class="row">Thème <select id="theme"><option value="light">Mode clair</option><option value="dark">Mode sombre</option></select></div>
+  <div class="row"><label><input type="checkbox" id="hideNames"> Masquer les notes sur le piano</label></div>
+  <div class="row"><label><input type="checkbox" id="showDur" checked> Afficher les durées (ronde, blanche, noire, croche)</label></div>
   <div class="row"><label><input type="checkbox" id="sound" checked> Son des notes</label></div>
   <div class="row"><label><input type="checkbox" id="strictOct" checked> Octave exacte</label></div>
   <div class="row">Clavier (enregistrer / s’entraîner) <select id="octs"><option>1</option><option selected>2</option><option>3</option><option>4</option><option>5</option></select> octaves</div>
@@ -252,19 +255,24 @@ function drawLedgerLines(x, idx) {
 }
 
 /* ---------- Note : lignes supplémentaires + tête + hampe ---------- */
-function drawNote(x, idx) {
+function drawNote(x, idx, kind) {
+  kind = kind || 'q';                          // w = ronde, h = blanche, q = noire, e = croche
   const y = noteToY(idx);
   drawLedgerLines(x, idx);
   const rx = 1.35*H, ry = 0.95*H;
-  ctx.beginPath(); ctx.ellipse(x, y, rx, ry, -0.35, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(x, y, rx, ry, -0.35, 0, Math.PI * 2);
+  if (kind === 'w' || kind === 'h') { ctx.lineWidth = 1.8; ctx.stroke(); } else ctx.fill();   // tête creuse : ronde / blanche
+  if (kind === 'w') return;                    // la ronde n'a pas de hampe
   // Règle simplifiée : au-dessus de la ligne médiane de sa portée -> hampe vers le bas
-  const mid = idx >= IDX_C4 ? TREBLE_MID : BASS_MID;
-  const down = idx >= mid;
-  ctx.lineWidth = 1.6;
-  ctx.beginPath();
-  if (down) { ctx.moveTo(x - rx + 1, y); ctx.lineTo(x - rx + 1, y + 7*H); }
-  else      { ctx.moveTo(x + rx - 1, y); ctx.lineTo(x + rx - 1, y - 7*H); }
-  ctx.stroke();
+  const down = idx >= (idx >= IDX_C4 ? TREBLE_MID : BASS_MID);
+  const sx = down ? x - rx + 1 : x + rx - 1, ye = down ? y + 7*H : y - 7*H;
+  ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(sx, y); ctx.lineTo(sx, ye); ctx.stroke();
+  if (kind === 'e') {                          // crochet de la croche, du côté du bout de la hampe
+    const d = down ? -1 : 1;
+    ctx.lineWidth = 2.4; ctx.beginPath(); ctx.moveTo(sx, ye);
+    ctx.bezierCurveTo(sx + 1.5*H, ye + d*1.5*H, sx + 2.6*H, ye + d*3*H, sx + 1.6*H, ye + d*5*H);
+    ctx.stroke();
+  }
 }
 
 /* ---------- Logique ---------- */
@@ -391,11 +399,13 @@ function buildKeyboard() {
     el.innerHTML = '<span>' + FR[l] + '<sub>' + oct + '</sub></span><small></small>';
     if (!rec) (kbLabels[l] = kbLabels[l] || []).push(el.lastChild);
     el.addEventListener('pointerdown', e => { e.preventDefault(); if (rec) noteOn(midi); else tap(l, oct); });
+    if (rec) ['pointerup', 'pointerleave'].forEach(ev => el.addEventListener(ev, () => noteOff(midi)));
     inner.appendChild(el);
     if (l !== 'E' && l !== 'B') {                      // touche noire (jouable en mode enregistrement)
       const bk = document.createElement('div'); bk.className = 'bk';
       bk.style.width = (w * 0.6) + '%'; bk.style.left = ((i + 1) * w - w * 0.3) + '%';
-      if (rec) bk.addEventListener('pointerdown', e => { e.preventDefault(); noteOn(midi + 1); });
+      if (rec) { bk.addEventListener('pointerdown', e => { e.preventDefault(); noteOn(midi + 1); });
+        ['pointerup', 'pointerleave'].forEach(ev => bk.addEventListener(ev, () => noteOff(midi + 1))); }
       inner.appendChild(bk);
     }
   }
@@ -506,7 +516,7 @@ try { navigator.permissions.query({ name: 'midi' }).then(p => { if (p.state === 
 const $ = id => document.getElementById(id);
 const PCS = [0, 2, 4, 5, 7, 9, 11];
 let mode = 'dictee';
-const SETTINGS = ['metOn', 'bpm', 'metVol', 'metSound', 'theme', 'sound', 'strictOct', 'octs'];
+const SETTINGS = ['metOn', 'bpm', 'metVol', 'metSound', 'theme', 'sound', 'strictOct', 'octs', 'hideNames', 'showDur'];
 
 /* --- Réglages sauvegardés dans localStorage --- */
 function saveSettings() {
@@ -522,6 +532,7 @@ function loadSettings() {
 }
 function applySettings() {
   document.documentElement.dataset.theme = $('theme').value;
+  document.body.classList.toggle('hide-names', $('hideNames').checked);
   $('bpmVal').textContent = $('bpm').value;
   startMet();
 }
@@ -585,14 +596,23 @@ function midiToPos(m) {
   const pc = m % 12, o = Math.floor(m / 12) - 1;
   return { idx: o * 7 + [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6][pc], sharp: [1, 3, 6, 8, 10].includes(pc) };
 }
-function drawMidiNote(x, midi, col) {
-  const p = midiToPos(midi); setInk(col); drawNote(x, p.idx);
+/* Durée en temps -> forme de la note (ronde 4, blanche 2, noire 1, croche 0,5) */
+function durKind(beats) {
+  if (!$('showDur').checked) return 'q';
+  return beats >= 3 ? 'w' : beats >= 1.5 ? 'h' : beats >= 0.75 ? 'q' : 'e';
+}
+function drawMidiNote(x, midi, col, kind) {
+  const p = midiToPos(midi); setInk(col); drawNote(x, p.idx, kind);
   if (p.sharp) { ctx.font = (3.4 * H) + 'px serif'; ctx.fillText('\u266F', x - 4.2 * H, noteToY(p.idx) + 1.1 * H); }
 }
 
 function renderSong(ink, red) {
   if (mode === 'record') {                                // les dernières notes jouées, la plus récente à droite
-    recNotes.forEach((n, i) => { const x = W - 40 - (recNotes.length - 1 - i) * 56; if (x > 100) drawMidiNote(x, n.midi, ink); });
+    recNotes.forEach((n, i) => {
+      const x = W - 40 - (recNotes.length - 1 - i) * 56; if (x <= 100) return;
+      const d = openN[n.midi] === n ? performance.now() - t0rec - n.t : n.d;      // note encore tenue : durée en cours
+      drawMidiNote(x, n.midi, ink, durKind(d * $('bpm').value / 60000));
+    });
     return;
   }
   if (!pr) return;
@@ -605,7 +625,7 @@ function renderSong(ink, red) {
   }
   pr.steps.forEach(s => {
     const x = px(s.tick); if (x < 90 || x > W + 20) return;
-    s.midis.forEach(m => drawMidiNote(x, m, s.done ? '#2a9d4a' : s.missed ? red : ink));
+    s.midis.forEach((m, j) => drawMidiNote(x, m, s.done ? '#2a9d4a' : s.missed ? red : ink, durKind(s.durs[j] / pr.tpq)));
   });
   ctx.strokeStyle = red; ctx.lineWidth = 2.5;
   ctx.beginPath(); ctx.moveTo(READ_X, noteToY(MAX_IDX + 3)); ctx.lineTo(READ_X, noteToY(MIN_IDX - 2)); ctx.stroke();
@@ -635,7 +655,7 @@ function parseMidi(buf) {
   const d = new DataView(buf); let p = 0;
   const u32 = () => { const v = d.getUint32(p); p += 4; return v; }, u16 = () => { const v = d.getUint16(p); p += 2; return v; };
   if (u32() !== 0x4D546864) throw 0;
-  u32(); u16(); const nt = u16(), tpq = u16(), ons = []; let bpm = 0, num = 4, den = 4;
+  u32(); u16(); const nt = u16(), tpq = u16(), ons = [], open = {}; let bpm = 0, num = 4, den = 4;
   for (let t = 0; t < nt; t++) {
     if (u32() !== 0x4D54726B) throw 0;
     const end = p + u32(); let tick = 0, run = 0;
@@ -651,7 +671,11 @@ function parseMidi(buf) {
       if (s === 0xF0 || s === 0xF7) { p++; let l = 0, c; do { c = d.getUint8(p++); l = (l << 7) | (c & 127); } while (c & 128); p += l; continue; }
       if (s & 128) { run = s; p++; }
       const k = run & 0xF0, a = d.getUint8(p++), v = (k === 0xC0 || k === 0xD0) ? 0 : d.getUint8(p++);
-      if (k === 0x90 && v > 0 && (run & 15) !== 9) ons.push({ tick, midi: a });   // canal 10 (batterie) ignoré
+      if ((run & 15) !== 9) {                              // canal 10 (batterie) ignoré
+        const key = (run & 15) * 128 + a;
+        if (k === 0x90 && v > 0) { const o = { tick, midi: a, dur: tpq }; ons.push(o); open[key] = o; }
+        else if ((k === 0x80 || k === 0x90) && open[key]) { open[key].dur = tick - open[key].tick; delete open[key]; }   // fin de note
+      }
     }
     p = end;
   }
@@ -659,7 +683,8 @@ function parseMidi(buf) {
   const steps = [];                                        // notes simultanées = un accord
   ons.forEach(o => {
     const l = steps[steps.length - 1];
-    if (l && o.tick - l.tick <= tpq / 16) { if (!l.midis.includes(o.midi)) l.midis.push(o.midi); } else steps.push({ tick: o.tick, midis: [o.midi] });
+    if (l && o.tick - l.tick <= tpq / 16) { if (!l.midis.includes(o.midi)) { l.midis.push(o.midi); l.durs.push(o.dur); } }
+    else steps.push({ tick: o.tick, midis: [o.midi], durs: [o.dur] });
   });
   const tpm = tpq * 4 * num / den;
   return { steps, tpq, tpm, bpm: bpm || 100, measures: Math.floor(steps[steps.length - 1].tick / tpm) + 1 };
@@ -679,7 +704,7 @@ function startPractice() {
   if (!song) { $('res').textContent = 'Importez d’abord un fichier .mid.'; return; }
   const m1 = Math.max(1, +$('m1').value || 1), m2 = Math.min(song.measures, Math.max(m1, +$('m2').value || song.measures));
   const steps = song.steps.filter(s => { const m = Math.floor(s.tick / song.tpm) + 1; return m >= m1 && m <= m2; })
-    .map(s => ({ tick: s.tick, midis: s.midis, got: [], done: false, missed: false }));
+    .map(s => ({ tick: s.tick, midis: s.midis, durs: s.durs, got: [], done: false, missed: false }));
   if (!steps.length) { $('res').textContent = 'Aucune note dans cette plage.'; return; }
   const tick0 = (m1 - 1) * song.tpm - 2 * song.tpq;       // décompte de 2 temps
   pr = { steps, tpq: song.tpq, tpm: song.tpm, bpm: +$('bpm').value, m1, m2, tick0, cur: tick0, t0: performance.now(),
