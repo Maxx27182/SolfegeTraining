@@ -45,6 +45,30 @@
   .midi button { padding:4px 12px; font:600 .9rem system-ui,sans-serif; color:var(--ink); background:var(--btn);
     border:1px solid var(--line); border-radius:6px; cursor:pointer; }
   .midi label { display:flex; align-items:center; gap:4px; }
+  :root[data-theme="dark"] { --bg:#121212; --card:#1c1c1c; --ink:#f2f2f2; --muted:#9a9a9a; --line:#3a3a3a;
+    --accent:#ff5a5a; --ok:#6fcf86; --btn:#2a2a2a; color-scheme: dark; }
+  header { display:flex; align-items:center; gap:8px; margin:4px 0 12px; }
+  header h1 { flex:1; margin:0; }
+  header select, #panel select { padding:6px; font:.9rem system-ui,sans-serif; color:var(--ink); background:var(--btn);
+    border:1px solid var(--line); border-radius:6px; }
+  #gear { font-size:1.6rem; line-height:1; padding:2px 8px; color:var(--ink); background:none; border:none; cursor:pointer; }
+  .tools { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:8px; font:.9rem system-ui,sans-serif; color:var(--muted); }
+  .tools button, .tools .btn, #panel button { padding:6px 12px; font:600 .9rem system-ui,sans-serif; color:var(--ink);
+    background:var(--btn); border:1px solid var(--line); border-radius:6px; cursor:pointer; }
+  .tools input[type=number] { width:56px; padding:5px; color:var(--ink); background:var(--card); border:1px solid var(--line); border-radius:6px; }
+  #res { font:.95rem/1.5 system-ui,sans-serif; margin:8px 0; min-height:1.2em; }
+  #panel { display:none; position:fixed; inset:0; z-index:50; align-items:center; justify-content:center; padding:16px; background:rgba(0,0,0,.45); }
+  #panel.open { display:flex; }
+  .sheet { width:100%; max-width:420px; max-height:90vh; overflow:auto; box-sizing:border-box; padding:14px 16px;
+    background:var(--card); color:var(--ink); border:1px solid var(--line); border-radius:10px; font:.95rem system-ui,sans-serif; }
+  .sheet h2 { margin:0 0 6px; font-size:1.1rem; }
+  .row { display:flex; justify-content:space-between; align-items:center; gap:10px; margin:10px 0; }
+  .row input[type=range] { flex:1; }
+  /* Visibilité selon le mode */
+  body:not([data-mode="dictee"]) .dict-only, body:not([data-mode="dictee"]) #pad { display:none; }
+  body:not([data-mode="record"]) .rec-only, body:not([data-mode="practice"]) .prac-only { display:none; }
+  body:not([data-mode="dictee"]) #kb { display:block; height:auto; }
+  #kb { overflow-x:auto; } #kbi { position:relative; height:104px; }
   /* Clavier 2 octaves (visible en paysage uniquement) */
   #kb { display:none; position:relative; height:104px; user-select:none; -webkit-user-select:none; touch-action:manipulation; }
   .wk { position:absolute; top:0; bottom:0; box-sizing:border-box; background:#ffffff; border:1px solid #000;
@@ -66,21 +90,42 @@
 </head>
 <body>
 <main>
-  <h1>Lecture à vue – double portée de piano</h1>
-  <div class="stats">
+  <header><h1>Lecture à vue – piano</h1>
+    <select id="mode" aria-label="Mode"><option value="dictee">Dictée de note</option><option value="record">S’enregistrer</option><option value="practice">S’entraîner sur un morceau</option></select>
+    <button id="gear" type="button" aria-label="Paramètres">⚙︎</button></header>
+  <div class="stats dict-only">
     <span>Réponses : <b id="sRatio">0/0</b></span>
     
     
     <span>Vitesse : <b id="sRate">0,0</b> notes/s · <b id="sPace">–</b> s/note</span>
     <button id="restart" type="button">Redémarrer</button>
   </div>
-  <div class="midi"><button id="midiBtn" type="button">Connecter le piano (MIDI)</button><span id="midiStatus">Aucun piano connecté</span><label><input type="checkbox" id="sound" checked> Son</label><label><input type="checkbox" id="strictOct" checked> Octave exacte</label></div>
+  <div class="midi"><button id="midiBtn" type="button">Connecter le piano (MIDI)</button><span id="midiStatus">Aucun piano connecté</span></div>
   <div id="wrap"><canvas id="cv"></canvas></div>
-  <div id="msg"></div>
+  <div id="msg" class="dict-only"></div>
+  <div class="tools">
+    <span class="rec-only"><button id="clearRec" type="button">Effacer</button> <button id="exp" type="button">Exporter (.mid)</button></span>
+    <span class="prac-only"><label class="btn">Importer .mid<input type="file" id="file" accept=".mid,.midi" hidden></label>
+      Mesures <input id="m1" type="number" min="1" value="1"> à <input id="m2" type="number" min="1" value="1">
+      <button id="start" type="button">▶ Démarrer</button></span>
+  </div>
+  <div id="res"></div>
   <div id="pad"></div>
   <div id="kb"></div>
   <div class="hint">Sous chaque bouton, choisissez la touche du clavier associée (une seule lettre, mémorisée).</div>
 </main>
+<div id="panel"><div class="sheet">
+  <h2>Paramètres</h2>
+  <div class="row"><label><input type="checkbox" id="metOn"> Métronome</label><span><output id="bpmVal">80</output> bpm</span></div>
+  <div class="row"><input type="range" id="bpm" min="40" max="200" value="80" aria-label="Fréquence"></div>
+  <div class="row">Volume du clac <input type="range" id="metVol" min="0" max="100" value="60"></div>
+  <div class="row">Son du clac <select id="metSound"><option value="bois">Bois</option><option value="clic">Clic</option><option value="cloche">Cloche</option><option value="tic">Tic</option><option value="basse">Basse</option></select></div>
+  <div class="row">Thème <select id="theme"><option value="light">Mode clair</option><option value="dark">Mode sombre</option></select></div>
+  <div class="row"><label><input type="checkbox" id="sound" checked> Son des notes</label></div>
+  <div class="row"><label><input type="checkbox" id="strictOct" checked> Octave exacte</label></div>
+  <div class="row">Clavier (enregistrer / s’entraîner) <select id="octs"><option>1</option><option selected>2</option><option>3</option><option>4</option><option>5</option></select> octaves</div>
+  <div class="row"><button id="closeP" type="button">Fermer</button></div>
+</div></div>
 
 <script>
 /* =====================================================================
@@ -225,6 +270,7 @@ function drawNote(x, idx) {
 /* ---------- Logique ---------- */
 /* Fait défiler les notes ; s'arrête quand la 1re note atteint la ligne rouge. */
 function update(dt) {
+  if (mode !== 'dictee') { updatePractice(); return; }
   fillQueue();                              // la file reste toujours assez remplie à droite
   // Les notes défilent à vitesse constante ; elles rattrapent plus vite si on a beaucoup anticipé
   if (offset > 0) offset = Math.max(0, offset - (SPEED + Math.max(0, offset - 2 * SPACING) * 2) * dt);
@@ -240,6 +286,7 @@ function render() {
   setInk(ink);
   drawStaff();
   drawClefs();
+  if (mode !== 'dictee') { renderSong(ink, red); return; }
   notes.forEach((n, i) => {
     const x = READ_X + offset + i * SPACING;
     if (x < W + 20) { setInk(ink); drawNote(x, n.idx); }
@@ -333,19 +380,23 @@ function buildPad() {
    sa lettre ; les touches noires sont décoratives (pas de dièses/bémols). */
 const kbLabels = {};
 function buildKeyboard() {
-  const kb = document.getElementById('kb'), N = 14, w = 100 / N;
-  for (let i = 0; i < N; i++) {
-    const l = LETTERS[i % 7];
+  const kb = $('kb'); kb.innerHTML = '';
+  Object.keys(kbLabels).forEach(k => delete kbLabels[k]);
+  const rec = mode !== 'dictee', N = rec ? +$('octs').value : 2, start = rec ? ({1:4, 2:3, 3:3, 4:2, 5:2})[N] : 3, T = N * 7, w = 100 / T;
+  const inner = document.createElement('div'); inner.id = 'kbi'; inner.style.minWidth = (T * 30) + 'px'; kb.appendChild(inner);
+  for (let i = 0; i < T; i++) {
+    const l = LETTERS[i % 7], oct = start + Math.floor(i / 7), midi = 12 * (oct + 1) + PCS[i % 7];
     const el = document.createElement('div'); el.className = 'wk';
     el.style.left = (i * w) + '%'; el.style.width = w + '%';
-    el.innerHTML = '<span>' + FR[l] + '<sub>' + (i < 7 ? 3 : 4) + '</sub></span><small></small>';
-    (kbLabels[l] = kbLabels[l] || []).push(el.lastChild);
-    el.addEventListener('pointerdown', e => { e.preventDefault(); tap(l, i < 7 ? 3 : 4); });
-    kb.appendChild(el);
-    if (l !== 'E' && l !== 'B') {            // touche noire entre deux touches blanches voisines
+    el.innerHTML = '<span>' + FR[l] + '<sub>' + oct + '</sub></span><small></small>';
+    if (!rec) (kbLabels[l] = kbLabels[l] || []).push(el.lastChild);
+    el.addEventListener('pointerdown', e => { e.preventDefault(); if (rec) noteOn(midi); else tap(l, oct); });
+    inner.appendChild(el);
+    if (l !== 'E' && l !== 'B') {                      // touche noire (jouable en mode enregistrement)
       const bk = document.createElement('div'); bk.className = 'bk';
       bk.style.width = (w * 0.6) + '%'; bk.style.left = ((i + 1) * w - w * 0.3) + '%';
-      kb.appendChild(bk);
+      if (rec) bk.addEventListener('pointerdown', e => { e.preventDefault(); noteOn(midi + 1); });
+      inner.appendChild(bk);
     }
   }
   refreshKeyLabels();
@@ -356,10 +407,10 @@ function refreshKeyLabels() {
 }
 
 document.addEventListener('keydown', e => {
-  if (e.target.tagName === 'INPUT' || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (/INPUT|SELECT/.test(e.target.tagName) || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
   const k = e.key.toUpperCase();
   const l = LETTERS.find(x => bindings[x] === k);
-  if (l) { e.preventDefault(); tap(l, 4); }
+  if (l && mode === 'dictee') { e.preventDefault(); tap(l, 4); }
 });
 
 /* ---------- Son (Web Audio) : petit synthé de type piano ---------- */
@@ -425,7 +476,9 @@ function midiStatus(t) { document.getElementById('midiStatus').textContent = t; 
 
 function onMidiMessage(ev) {
   const st = ev.data[0], note = ev.data[1], vel = ev.data[2];
-  if ((st & 0xF0) !== 0x90 || vel === 0) return;       // seulement les "note on"
+  const isOn = (st & 0xF0) === 0x90 && vel > 0, isOff = (st & 0xF0) === 0x80 || ((st & 0xF0) === 0x90 && vel === 0);
+  if (mode !== 'dictee') { if (isOn) noteOn(note, true); else if (isOff) noteOff(note); return; }
+  if (!isOn) return;                                    // dictée : seulement les "note on"
   const letter = PC_TO_LETTER[note % 12];
   if (!letter) return;                                  // touche noire : ignorée
   checkAnswer(letter, note);
@@ -449,6 +502,215 @@ document.getElementById('midiBtn').addEventListener('click', connectMidi);
 // Reconnexion automatique si la permission a déjà été accordée
 try { navigator.permissions.query({ name: 'midi' }).then(p => { if (p.state === 'granted') connectMidi(); }).catch(() => {}); } catch (e) {}
 
+/* ================= Réglages, métronome, modes ================= */
+const $ = id => document.getElementById(id);
+const PCS = [0, 2, 4, 5, 7, 9, 11];
+let mode = 'dictee';
+const SETTINGS = ['metOn', 'bpm', 'metVol', 'metSound', 'theme', 'sound', 'strictOct', 'octs'];
+
+/* --- Réglages sauvegardés dans localStorage --- */
+function saveSettings() {
+  const o = {}; SETTINGS.forEach(id => { const e = $(id); o[id] = e.type === 'checkbox' ? e.checked : e.value; });
+  try { localStorage.setItem('pianoReadSettings', JSON.stringify(o)); } catch (e) {}
+}
+function loadSettings() {
+  try {
+    const o = JSON.parse(localStorage.getItem('pianoReadSettings') || '{}');
+    SETTINGS.forEach(id => { if (id in o) { const e = $(id); if (e.type === 'checkbox') e.checked = !!o[id]; else e.value = o[id]; } });
+  } catch (e) {}
+  applySettings();
+}
+function applySettings() {
+  document.documentElement.dataset.theme = $('theme').value;
+  $('bpmVal').textContent = $('bpm').value;
+  startMet();
+}
+$('panel').addEventListener('input', () => { saveSettings(); applySettings(); });
+$('octs').addEventListener('change', buildKeyboard);
+$('gear').addEventListener('click', () => $('panel').classList.add('open'));
+$('closeP').addEventListener('click', () => $('panel').classList.remove('open'));
+$('panel').addEventListener('click', e => { if (e.target.id === 'panel') $('panel').classList.remove('open'); });
+document.addEventListener('pointerdown', () => { if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume(); });
+
+/* --- Métronome : planification précise avec l'horloge audio --- */
+const CLICKS = { bois:['triangle', 900, .05], clic:['square', 1800, .02], cloche:['sine', 1320, .3], tic:['sawtooth', 2600, .012], basse:['sine', 180, .09] };
+let metTimer = null, nextClick = 0, beatNo = 0;
+function getAC() {
+  if (!audioCtx) { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); masterBus = audioCtx.createDynamicsCompressor(); masterBus.connect(audioCtx.destination); }
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+function startMet() {
+  clearInterval(metTimer); metTimer = null;
+  if (!$('metOn').checked) return;
+  try {
+    nextClick = getAC().currentTime + 0.05; beatNo = 0;
+    metTimer = setInterval(() => {
+      while (nextClick < audioCtx.currentTime + 0.12) { click(nextClick, beatNo++ % 4 === 0); nextClick += 60 / $('bpm').value; }
+    }, 25);
+  } catch (e) {}
+}
+function click(t, accent) {            // premier temps de mesure : plus aigu
+  const c = CLICKS[$('metSound').value], o = audioCtx.createOscillator(), g = audioCtx.createGain(), v = $('metVol').value / 100;
+  o.type = c[0]; o.frequency.value = c[1] * (accent ? 1.5 : 1);
+  g.gain.setValueAtTime(v * 0.6 + 0.0001, t); g.gain.exponentialRampToValueAtTime(0.0001, t + c[2]);
+  o.connect(g); g.connect(masterBus); o.start(t); o.stop(t + c[2] + 0.02);
+}
+
+/* --- Modes --- */
+let recNotes = [], openN = {}, t0rec = 0, pr = null, song = null;
+function setMode(m) {
+  mode = m; document.body.dataset.mode = m; $('mode').value = m;
+  recNotes = []; openN = {}; pr = null; $('res').textContent = '';
+  if (m === 'dictee') restart();
+  buildKeyboard();
+}
+$('mode').addEventListener('change', e => setMode(e.target.value));
+
+/* Une note jouée (clavier écran ou piano MIDI) en mode enregistrement / entraînement */
+function noteOn(midi, fromMidi) {
+  if (!fromMidi) playNote(midi);                          // le piano MIDI sonne déjà tout seul
+  const now = performance.now();
+  if (mode === 'record') {
+    if (!recNotes.length) t0rec = now;
+    const n = { midi, t: now - t0rec, d: 400 }; recNotes.push(n); openN[midi] = n;
+  } else if (mode === 'practice') practiceHit(midi, now);
+}
+function noteOff(midi) {
+  const n = openN[midi]; if (n) { n.d = Math.max(60, performance.now() - t0rec - n.t); delete openN[midi]; }
+}
+
+/* Numéro MIDI -> degré diatonique de la note naturelle + dièse éventuel */
+function midiToPos(m) {
+  const pc = m % 12, o = Math.floor(m / 12) - 1;
+  return { idx: o * 7 + [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6][pc], sharp: [1, 3, 6, 8, 10].includes(pc) };
+}
+function drawMidiNote(x, midi, col) {
+  const p = midiToPos(midi); setInk(col); drawNote(x, p.idx);
+  if (p.sharp) { ctx.font = (3.4 * H) + 'px serif'; ctx.fillText('\u266F', x - 4.2 * H, noteToY(p.idx) + 1.1 * H); }
+}
+
+function renderSong(ink, red) {
+  if (mode === 'record') {                                // les dernières notes jouées, la plus récente à droite
+    recNotes.forEach((n, i) => { const x = W - 40 - (recNotes.length - 1 - i) * 56; if (x > 100) drawMidiNote(x, n.midi, ink); });
+    return;
+  }
+  if (!pr) return;
+  const px = tk => READ_X + (tk - pr.cur) / pr.tpq * 80;  // 80 px par temps
+  const yT = noteToY(TREBLE_LINES[4]), yB = noteToY(BASS_LINES[0]);
+  setInk(ink); ctx.lineWidth = 1; ctx.font = '11px system-ui';
+  for (let m = pr.m1; m <= pr.m2 + 1; m++) {              // barres de mesure numérotées
+    const x = px((m - 1) * pr.tpm);
+    if (x > 90 && x < W) { ctx.beginPath(); ctx.moveTo(x, yT); ctx.lineTo(x, yB); ctx.stroke(); ctx.fillText(m, x + 3, yT - 6); }
+  }
+  pr.steps.forEach(s => {
+    const x = px(s.tick); if (x < 90 || x > W + 20) return;
+    s.midis.forEach(m => drawMidiNote(x, m, s.done ? '#2a9d4a' : s.missed ? red : ink));
+  });
+  ctx.strokeStyle = red; ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.moveTo(READ_X, noteToY(MAX_IDX + 3)); ctx.lineTo(READ_X, noteToY(MIN_IDX - 2)); ctx.stroke();
+}
+
+/* --- Export : fichier MIDI standard (SMF type 0) --- */
+function vlq(n) { const b = [n & 127]; while ((n >>= 7)) b.unshift((n & 127) | 128); return b; }
+function exportMidi() {
+  if (!recNotes.length) return;
+  const bpm = +$('bpm').value, tpq = 480, k = tpq * bpm / 60000, mpq = Math.round(60000000 / bpm), ev = [];
+  recNotes.forEach(n => { ev.push([Math.round(n.t * k), 0x90, n.midi, 80]); ev.push([Math.round((n.t + n.d) * k), 0x80, n.midi, 0]); });
+  ev.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const tr = [0, 0xFF, 0x51, 3, (mpq >> 16) & 255, (mpq >> 8) & 255, mpq & 255]; let last = 0;
+  ev.forEach(e => { tr.push(...vlq(e[0] - last), e[1], e[2], e[3]); last = e[0]; });
+  tr.push(0, 0xFF, 0x2F, 0);
+  const L = tr.length, hdr = [0x4D, 0x54, 0x68, 0x64, 0, 0, 0, 6, 0, 0, 0, 1, tpq >> 8, tpq & 255];
+  const th = [0x4D, 0x54, 0x72, 0x6B, (L >>> 24) & 255, (L >> 16) & 255, (L >> 8) & 255, L & 255];
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([new Uint8Array([...hdr, ...th, ...tr])], { type: 'audio/midi' }));
+  a.download = 'enregistrement.mid'; a.click();
+}
+$('exp').addEventListener('click', exportMidi);
+$('clearRec').addEventListener('click', () => { recNotes = []; openN = {}; });
+
+/* --- Import : lecture d'un fichier MIDI (notes, tempo, mesure) --- */
+function parseMidi(buf) {
+  const d = new DataView(buf); let p = 0;
+  const u32 = () => { const v = d.getUint32(p); p += 4; return v; }, u16 = () => { const v = d.getUint16(p); p += 2; return v; };
+  if (u32() !== 0x4D546864) throw 0;
+  u32(); u16(); const nt = u16(), tpq = u16(), ons = []; let bpm = 0, num = 4, den = 4;
+  for (let t = 0; t < nt; t++) {
+    if (u32() !== 0x4D54726B) throw 0;
+    const end = p + u32(); let tick = 0, run = 0;
+    while (p < end) {
+      let dt = 0, b; do { b = d.getUint8(p++); dt = (dt << 7) | (b & 127); } while (b & 128);
+      tick += dt; const s = d.getUint8(p);
+      if (s === 0xFF) {                                    // méta-événement : tempo, signature
+        const ty = d.getUint8(p + 1), l = d.getUint8(p + 2);
+        if (ty === 0x51 && !bpm) bpm = 60000000 / ((d.getUint8(p + 3) << 16) | (d.getUint8(p + 4) << 8) | d.getUint8(p + 5));
+        if (ty === 0x58 && tick === 0) { num = d.getUint8(p + 3); den = 1 << d.getUint8(p + 4); }
+        p += 3 + l; continue;
+      }
+      if (s === 0xF0 || s === 0xF7) { p++; let l = 0, c; do { c = d.getUint8(p++); l = (l << 7) | (c & 127); } while (c & 128); p += l; continue; }
+      if (s & 128) { run = s; p++; }
+      const k = run & 0xF0, a = d.getUint8(p++), v = (k === 0xC0 || k === 0xD0) ? 0 : d.getUint8(p++);
+      if (k === 0x90 && v > 0 && (run & 15) !== 9) ons.push({ tick, midi: a });   // canal 10 (batterie) ignoré
+    }
+    p = end;
+  }
+  ons.sort((a, b) => a.tick - b.tick);
+  const steps = [];                                        // notes simultanées = un accord
+  ons.forEach(o => {
+    const l = steps[steps.length - 1];
+    if (l && o.tick - l.tick <= tpq / 16) { if (!l.midis.includes(o.midi)) l.midis.push(o.midi); } else steps.push({ tick: o.tick, midis: [o.midi] });
+  });
+  const tpm = tpq * 4 * num / den;
+  return { steps, tpq, tpm, bpm: bpm || 100, measures: Math.floor(steps[steps.length - 1].tick / tpm) + 1 };
+}
+$('file').addEventListener('change', async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try {
+    song = parseMidi(await f.arrayBuffer());
+    $('m1').value = 1; $('m2').value = song.measures;
+    $('bpm').value = Math.min(200, Math.max(40, Math.round(song.bpm))); saveSettings(); applySettings();
+    $('res').textContent = f.name + ' : ' + song.measures + ' mesures, tempo ' + Math.round(song.bpm) + '. Choisissez la plage puis Démarrer.';
+  } catch (err) { song = null; $('res').textContent = 'Fichier MIDI illisible.'; }
+});
+
+/* --- Entraînement : les notes défilent, on les joue en rythme --- */
+function startPractice() {
+  if (!song) { $('res').textContent = 'Importez d’abord un fichier .mid.'; return; }
+  const m1 = Math.max(1, +$('m1').value || 1), m2 = Math.min(song.measures, Math.max(m1, +$('m2').value || song.measures));
+  const steps = song.steps.filter(s => { const m = Math.floor(s.tick / song.tpm) + 1; return m >= m1 && m <= m2; })
+    .map(s => ({ tick: s.tick, midis: s.midis, got: [], done: false, missed: false }));
+  if (!steps.length) { $('res').textContent = 'Aucune note dans cette plage.'; return; }
+  const tick0 = (m1 - 1) * song.tpm - 2 * song.tpq;       // décompte de 2 temps
+  pr = { steps, tpq: song.tpq, tpm: song.tpm, bpm: +$('bpm').value, m1, m2, tick0, cur: tick0, t0: performance.now(),
+         end: m2 * song.tpm, hits: 0, wrong: 0, deltas: [], over: false };
+  $('res').textContent = ''; startMet();
+}
+$('start').addEventListener('click', startPractice);
+function curTick(now) { return pr.tick0 + (now - pr.t0) * pr.bpm * pr.tpq / 60000; }
+function updatePractice() {
+  if (!pr || pr.over) return;
+  pr.cur = curTick(performance.now());
+  pr.steps.forEach(s => { if (!s.done && !s.missed && pr.cur - s.tick > pr.tpq * 0.5) s.missed = true; });   // trop tard : raté
+  if (pr.cur > pr.end + pr.tpq) finishPractice();
+}
+function practiceHit(midi, now) {
+  if (!pr || pr.over) return;
+  const cur = curTick(now);
+  const s = pr.steps.find(s => !s.done && !s.missed && s.midis.includes(midi) && !s.got.includes(midi) && Math.abs(cur - s.tick) <= pr.tpq * 0.5);
+  if (!s) { pr.wrong++; return; }                          // note absente de la partition à ce moment
+  s.got.push(midi); pr.hits++; pr.deltas.push((cur - s.tick) * 60000 / (pr.bpm * pr.tpq));
+  if (s.got.length === s.midis.length) s.done = true;
+}
+function finishPractice() {
+  pr.over = true;
+  const tot = pr.steps.reduce((a, s) => a + s.midis.length, 0), d = pr.deltas, n = d.length;
+  const avg = n ? d.reduce((a, x) => a + x, 0) / n : 0, abs = n ? d.reduce((a, x) => a + Math.abs(x), 0) / n : 0;
+  $('res').innerHTML = 'Notes justes : <b>' + pr.hits + '/' + tot + '</b> · ratées : <b>' + (tot - pr.hits) + '</b> · fausses notes : <b>' + pr.wrong + '</b><br>' +
+    'Écart moyen : <b>' + Math.round(abs) + ' ms</b> (' + (avg > 20 ? 'plutôt en retard' : avg < -20 ? 'plutôt en avance' : 'bien centré') + ')<br>' +
+    'Dans le rythme (±100 ms) : <b>' + (n ? Math.round(100 * d.filter(x => Math.abs(x) < 100).length / n) : 0) + ' %</b>';
+}
+
 /* ---------- Canvas HiDPI + boucle ---------- */
 function resize() {
   const dpr = window.devicePixelRatio || 1;
@@ -468,7 +730,7 @@ function frame(t) {
   requestAnimationFrame(frame);
 }
 
-loadBindings(); buildPad(); buildKeyboard(); resize(); updateStats();
+loadBindings(); buildPad(); loadSettings(); setMode('dictee'); resize(); updateStats();
 offset = SPACING * 2;                  // première note qui arrive de la droite
 requestAnimationFrame(t => { last = t; frame(t); });
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
