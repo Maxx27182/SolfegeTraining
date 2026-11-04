@@ -58,6 +58,8 @@
   .tools input[type=number] { width:56px; padding:5px; color:var(--ink); background:var(--card); border:1px solid var(--line); border-radius:6px; }
   #res { font:.95rem/1.5 system-ui,sans-serif; margin:8px 0; min-height:1.2em; }
   #ver { font:.75rem system-ui,sans-serif; color:var(--muted); }
+  .range { margin-bottom:10px; font:.9rem system-ui,sans-serif; color:var(--muted); }
+  .range select { padding:6px; font:.9rem system-ui,sans-serif; color:var(--ink); background:var(--btn); border:1px solid var(--line); border-radius:6px; }
   body[data-screen="home"] main > :not(header):not(#home) { display:none !important; }
   body[data-screen="home"] #back, body:not([data-screen="home"]) #home { display:none; }
   #home .lead { font:1rem system-ui,sans-serif; color:var(--muted); margin:0 0 12px; }
@@ -140,6 +142,7 @@
     <button id="restart" type="button">Redémarrer</button>
   </div>
   <div class="midi"><button id="midiBtn" type="button">Connecter le piano (MIDI)</button><span id="midiStatus">Aucun piano connecté</span></div>
+  <div class="range dict-only">Notes de <select id="rangeLo" aria-label="Première note"></select> à <select id="rangeHi" aria-label="Dernière note"></select></div>
   <div id="wrap"><canvas id="cv"></canvas></div>
   <div id="msg" class="dict-only"></div>
   <div class="tools">
@@ -167,7 +170,7 @@
   <div class="row"><label><input type="checkbox" id="sound" checked> Son des notes</label></div>
   <div class="row"><label><input type="checkbox" id="realPiano" checked> Sons de piano réalistes (téléchargés une fois, ~5 Mo)</label></div>
   <div class="row"><label><input type="checkbox" id="strictOct" checked> Octave exacte</label></div>
-  <div class="row">Clavier (enregistrer / s’entraîner) <select id="octs"><option>1</option><option selected>2</option><option>3</option><option>4</option><option>5</option></select> octaves</div>
+  <div class="row">Clavier à l’écran <select id="octs"><option>1</option><option selected>2</option><option>3</option><option>4</option><option>5</option></select> octaves</div>
   <p class="credit">Échantillons de piano : Salamander Grand Piano (A. Holm), licence CC-BY 3.0, via Tone.js.</p>
   <div class="row"><button id="closeP" type="button">Fermer</button></div>
 </div></div>
@@ -221,7 +224,8 @@ let stats = { ok:0, total:0 }, flashUntil = 0, bindings = {}, last = 0, elapsed 
 
 /* Note aléatoire naturelle entre C2 et G5. */
 function randomNote() {
-  const idx = MIN_IDX + Math.floor(Math.random() * (MAX_IDX - MIN_IDX + 1));
+  const lo = +$('rangeLo').value || MIN_IDX, hi = +$('rangeHi').value || MAX_IDX;   // intervalle choisi
+  const idx = lo + Math.floor(Math.random() * (hi - lo + 1));
   return { idx, letter: LETTERS[idx % 7] };
 }
 function fillQueue() {
@@ -427,7 +431,7 @@ const kbLabels = {};
 function buildKeyboard() {
   const kb = $('kb'); kb.innerHTML = '';
   Object.keys(kbLabels).forEach(k => delete kbLabels[k]);
-  const rec = mode !== 'dictee', N = rec ? +$('octs').value : 2, start = rec ? ({1:4, 2:3, 3:3, 4:2, 5:2})[N] : 3, T = N * 7, w = 100 / T;
+  const rec = mode !== 'dictee', N = +$('octs').value, start = ({1:4, 2:3, 3:3, 4:2, 5:2})[N], T = N * 7, w = 100 / T;
   const inner = document.createElement('div'); inner.id = 'kbi'; inner.style.minWidth = (T * 30) + 'px'; kb.appendChild(inner);
   for (let i = 0; i < T; i++) {
     const l = LETTERS[i % 7], oct = start + Math.floor(i / 7), midi = 12 * (oct + 1) + PCS[i % 7];
@@ -590,11 +594,23 @@ try { navigator.permissions.query({ name: 'midi' }).then(p => { if (p.state === 
 
 /* ================= Réglages, métronome, modes ================= */
 const $ = id => document.getElementById(id);
-const APP_VERSION = 'v12';          // à garder identique au numéro de cache dans sw.js
+const APP_VERSION = 'v13';          // à garder identique au numéro de cache dans sw.js
 $('ver').textContent = APP_VERSION;
+
+/* --- Intervalle de la dictée : listes Do2 ... Si5 --- */
+for (let i = MIN_IDX; i <= MAX_IDX; i++) ['rangeLo', 'rangeHi'].forEach(id => {
+  const o = document.createElement('option'); o.value = i; o.textContent = FR[LETTERS[i % 7]] + Math.floor(i / 7); $(id).appendChild(o);
+});
+$('rangeLo').value = MIN_IDX; $('rangeHi').value = MAX_IDX;
+function rangeChanged(e) {
+  const lo = $('rangeLo'), hi = $('rangeHi');
+  if (+lo.value > +hi.value) { if (e.target === lo) hi.value = lo.value; else lo.value = hi.value; }   // garde lo <= hi
+  saveSettings(); notes = []; fillQueue();                                                              // nouvelle file de notes
+}
+$('rangeLo').addEventListener('change', rangeChanged); $('rangeHi').addEventListener('change', rangeChanged);
 const PCS = [0, 2, 4, 5, 7, 9, 11];
 let mode = 'dictee';
-const SETTINGS = ['metOn', 'bpm', 'metVol', 'metSound', 'theme', 'sound', 'strictOct', 'octs', 'hideNames', 'showDur', 'realPiano'];
+const SETTINGS = ['metOn', 'bpm', 'metVol', 'metSound', 'theme', 'sound', 'strictOct', 'octs', 'hideNames', 'showDur', 'realPiano', 'rangeLo', 'rangeHi'];
 
 /* --- Réglages sauvegardés dans localStorage --- */
 function saveSettings() {
