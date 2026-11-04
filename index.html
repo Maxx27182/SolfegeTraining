@@ -428,10 +428,12 @@ function buildPad() {
    14 touches blanches (Do Ré Mi Fa Sol La Si x2). Cliquer une touche répond avec
    sa lettre ; les touches noires sont décoratives (pas de dièses/bémols). */
 const kbLabels = {};
+let kbLo = 0, kbHi = 0;                  // degrés diatoniques couverts par le clavier affiché
 function buildKeyboard() {
   const kb = $('kb'); kb.innerHTML = '';
   Object.keys(kbLabels).forEach(k => delete kbLabels[k]);
   const rec = mode !== 'dictee', N = +$('octs').value, start = ({1:4, 2:3, 3:3, 4:2, 5:2})[N], T = N * 7, w = 100 / T;
+  kbLo = start * 7; kbHi = (start + N) * 7 - 1;
   const inner = document.createElement('div'); inner.id = 'kbi'; inner.style.minWidth = (T * 30) + 'px'; kb.appendChild(inner);
   for (let i = 0; i < T; i++) {
     const l = LETTERS[i % 7], oct = start + Math.floor(i / 7), midi = 12 * (oct + 1) + PCS[i % 7];
@@ -439,7 +441,7 @@ function buildKeyboard() {
     el.style.left = (i * w) + '%'; el.style.width = w + '%';
     el.innerHTML = '<span>' + FR[l] + '<sub>' + oct + '</sub></span><small></small>';
     if (!rec) (kbLabels[l] = kbLabels[l] || []).push(el.lastChild);
-    el.addEventListener('pointerdown', e => { e.preventDefault(); if (rec) noteOn(midi); else tap(l, oct); });
+    el.addEventListener('pointerdown', e => { e.preventDefault(); if (rec) noteOn(midi); else tap(l, oct, true); });
     if (rec) ['pointerup', 'pointerleave'].forEach(ev => el.addEventListener(ev, () => noteOff(midi)));
     inner.appendChild(el);
     if (l !== 'E' && l !== 'B') {                      // touche noire (jouable en mode enregistrement)
@@ -510,9 +512,12 @@ function playNote(midi) {
 }
 /* Réponse à l'écran ou au clavier : joue la note (octave donnée) puis la vérifie.
    Les notes venant du piano MIDI ne sonnent pas ici : le piano joue déjà lui-même. */
-function tap(letter, octave) {
-  playNote(indexToMidi(octave * 7 + LETTERS.indexOf(letter)));
-  checkAnswer(letter);
+function tap(letter, octave, fromKeys) {
+  const midi = indexToMidi(octave * 7 + LETTERS.indexOf(letter));
+  playNote(midi);
+  // « Octave exacte » : valable pour les touches du piano à l'écran quand il couvre tout l'intervalle de la dictée
+  const covers = +$('rangeLo').value >= kbLo && +$('rangeHi').value <= kbHi;
+  checkAnswer(letter, fromKeys && covers ? midi : undefined);
 }
 
 /* ---------- Sons réalistes : échantillons du Salamander Grand Piano ----------
@@ -594,7 +599,7 @@ try { navigator.permissions.query({ name: 'midi' }).then(p => { if (p.state === 
 
 /* ================= Réglages, métronome, modes ================= */
 const $ = id => document.getElementById(id);
-const APP_VERSION = 'v13';          // à garder identique au numéro de cache dans sw.js
+const APP_VERSION = 'v14';          // à garder identique au numéro de cache dans sw.js
 $('ver').textContent = APP_VERSION;
 
 /* --- Intervalle de la dictée : listes Do2 ... Si5 --- */
@@ -605,7 +610,8 @@ $('rangeLo').value = MIN_IDX; $('rangeHi').value = MAX_IDX;
 function rangeChanged(e) {
   const lo = $('rangeLo'), hi = $('rangeHi');
   if (+lo.value > +hi.value) { if (e.target === lo) hi.value = lo.value; else lo.value = hi.value; }   // garde lo <= hi
-  saveSettings(); notes = []; fillQueue();                                                              // nouvelle file de notes
+  saveSettings(); notes = []; fillQueue(); buildKeyboard();   // le clavier doit-il couvrir l'intervalle ?
+                                                               // nouvelle file de notes
 }
 $('rangeLo').addEventListener('change', rangeChanged); $('rangeHi').addEventListener('change', rangeChanged);
 const PCS = [0, 2, 4, 5, 7, 9, 11];
