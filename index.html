@@ -57,6 +57,8 @@
     background:var(--btn); border:1px solid var(--line); border-radius:6px; cursor:pointer; }
   .tools input[type=number] { width:56px; padding:5px; color:var(--ink); background:var(--card); border:1px solid var(--line); border-radius:6px; }
   #res { font:.95rem/1.5 system-ui,sans-serif; margin:8px 0; min-height:1.2em; }
+  #ver { font:.75rem system-ui,sans-serif; color:var(--muted); }
+  .tools label { display:flex; align-items:center; gap:4px; } .tools input[type=range] { width:90px; }
   #panel { display:none; position:fixed; inset:0; z-index:50; align-items:center; justify-content:center; padding:16px; background:rgba(0,0,0,.45); }
   #panel.open { display:flex; }
   .sheet { width:100%; max-width:420px; max-height:90vh; overflow:auto; box-sizing:border-box; padding:14px 16px;
@@ -92,6 +94,7 @@
 <body>
 <main>
   <header><h1>Lecture à vue – piano</h1>
+    <span id="ver"></span>
     <select id="mode" aria-label="Mode"><option value="dictee">Dictée de note</option><option value="record">S’enregistrer</option><option value="practice">S’entraîner sur un morceau</option></select>
     <button id="gear" type="button" aria-label="Paramètres">⚙︎</button></header>
   <div class="stats dict-only">
@@ -108,6 +111,8 @@
     <span class="rec-only"><button id="clearRec" type="button">Effacer</button> <button id="exp" type="button">Exporter (.mid)</button></span>
     <span class="prac-only"><label class="btn">Importer .mid<input type="file" id="file" accept=".mid,.midi" hidden></label>
       Mesures <input id="m1" type="number" min="1" value="1"> à <input id="m2" type="number" min="1" value="1">
+      <label>Vitesse <input type="range" id="speed" min="20" max="100" step="5" value="100"> <output id="speedVal">100</output> %</label>
+      <label><input type="checkbox" id="wait"> Attendre mes notes</label>
       <button id="start" type="button">▶ Démarrer</button></span>
   </div>
   <div id="res"></div>
@@ -118,7 +123,7 @@
 <div id="panel"><div class="sheet">
   <h2>Paramètres</h2>
   <div class="row"><label><input type="checkbox" id="metOn"> Métronome</label><span><output id="bpmVal">80</output> bpm</span></div>
-  <div class="row"><input type="range" id="bpm" min="40" max="200" value="80" aria-label="Fréquence"></div>
+  <div class="row"><input type="range" id="bpm" min="20" max="200" value="80" aria-label="Fréquence"></div>
   <div class="row">Volume du clac <input type="range" id="metVol" min="0" max="100" value="60"></div>
   <div class="row">Son du clac <select id="metSound"><option value="bois">Bois</option><option value="clic">Clic</option><option value="cloche">Cloche</option><option value="tic">Tic</option><option value="basse">Basse</option></select></div>
   <div class="row">Thème <select id="theme"><option value="light">Mode clair</option><option value="dark">Mode sombre</option></select></div>
@@ -267,18 +272,13 @@ function drawNote(x, idx, kind, noStem) {
   const down = idx >= (idx >= IDX_C4 ? TREBLE_MID : BASS_MID);
   const sx = down ? x - rx + 1 : x + rx - 1, ye = down ? y + 7*H : y - 7*H;
   ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(sx, y); ctx.lineTo(sx, ye); ctx.stroke();
-  if (kind === 'e') {                          // crochet de la croche, du côté du bout de la hampe
-    const d = down ? -1 : 1;
-    ctx.lineWidth = 2.4; ctx.beginPath(); ctx.moveTo(sx, ye);
-    ctx.bezierCurveTo(sx + 1.5*H, ye + d*1.5*H, sx + 2.6*H, ye + d*3*H, sx + 1.6*H, ye + d*5*H);
-    ctx.stroke();
-  }
+  if (kind === 'e' || kind === 's') drawFlags(sx, ye, down, kind === 's' ? 2 : 1);
 }
 
 /* ---------- Logique ---------- */
 /* Fait défiler les notes ; s'arrête quand la 1re note atteint la ligne rouge. */
 function update(dt) {
-  if (mode !== 'dictee') { updatePractice(); return; }
+  if (mode !== 'dictee') { updatePractice(dt); return; }
   fillQueue();                              // la file reste toujours assez remplie à droite
   // Les notes défilent à vitesse constante ; elles rattrapent plus vite si on a beaucoup anticipé
   if (offset > 0) offset = Math.max(0, offset - (SPEED + Math.max(0, offset - 2 * SPACING) * 2) * dt);
@@ -514,6 +514,8 @@ try { navigator.permissions.query({ name: 'midi' }).then(p => { if (p.state === 
 
 /* ================= Réglages, métronome, modes ================= */
 const $ = id => document.getElementById(id);
+const APP_VERSION = 'v11';          // à garder identique au numéro de cache dans sw.js
+$('ver').textContent = APP_VERSION;
 const PCS = [0, 2, 4, 5, 7, 9, 11];
 let mode = 'dictee';
 const SETTINGS = ['metOn', 'bpm', 'metVol', 'metSound', 'theme', 'sound', 'strictOct', 'octs', 'hideNames', 'showDur'];
@@ -618,10 +620,17 @@ function drawChord(x, midis, col, kind) {
   const lo = noteToY(ps[0].idx), hi = noteToY(ps[ps.length - 1].idx);   // lo = note la plus grave (y grand)
   const sx = down ? x - rx + 1 : x + rx - 1, ys = down ? hi : lo, ye = down ? lo + 7 * H : hi - 7 * H;
   ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(sx, ys); ctx.lineTo(sx, ye); ctx.stroke();
-  if (kind === 'e') {                                        // crochet de la croche
-    const d = down ? -1 : 1;
-    ctx.lineWidth = 2.4; ctx.beginPath(); ctx.moveTo(sx, ye);
-    ctx.bezierCurveTo(sx + 1.5 * H, ye + d * 1.5 * H, sx + 2.6 * H, ye + d * 3 * H, sx + 1.6 * H, ye + d * 5 * H);
+  if (kind === 'e' || kind === 's') drawFlags(sx, ye, down, kind === 's' ? 2 : 1);
+}
+
+/* Crochets de hampe : 1 pour la croche, 2 pour la double croche */
+function drawFlags(sx, ye, down, n) {
+  const d = down ? -1 : 1;
+  ctx.lineWidth = 2.4;
+  for (let f = 0; f < n; f++) {
+    const y0 = ye + d * 2 * H * f;
+    ctx.beginPath(); ctx.moveTo(sx, y0);
+    ctx.bezierCurveTo(sx + 1.5 * H, y0 + d * 1.5 * H, sx + 2.6 * H, y0 + d * 3 * H, sx + 1.6 * H, y0 + d * 5 * H);
     ctx.stroke();
   }
 }
@@ -629,7 +638,7 @@ function drawChord(x, midis, col, kind) {
 /* Durée en temps -> forme de la note (ronde 4, blanche 2, noire 1, croche 0,5) */
 function durKind(beats) {
   if (!$('showDur').checked) return 'q';
-  return beats >= 3 ? 'w' : beats >= 1.5 ? 'h' : beats >= 0.75 ? 'q' : 'e';
+  return beats >= 3 ? 'w' : beats >= 1.5 ? 'h' : beats >= 0.75 ? 'q' : beats >= 0.375 ? 'e' : 's';
 }
 function drawMidiNote(x, midi, col, kind) {
   const p = midiToPos(midi); setInk(col); drawNote(x, p.idx, kind);
@@ -706,18 +715,23 @@ function parseMidi(buf) {
       const k = run & 0xF0, a = d.getUint8(p++), v = (k === 0xC0 || k === 0xD0) ? 0 : d.getUint8(p++);
       if ((run & 15) !== 9) {                              // canal 10 (batterie) ignoré
         const key = (run & 15) * 128 + a;
-        if (k === 0x90 && v > 0) { const o = { tick, midi: a, dur: tpq }; ons.push(o); open[key] = o; }
+        if (k === 0x90 && v > 0) { const o = { tick, midi: a, dur: tpq, trk: t }; ons.push(o); open[key] = o; }
         else if ((k === 0x80 || k === 0x90) && open[key]) { open[key].dur = tick - open[key].tick; delete open[key]; }   // fin de note
       }
     }
     p = end;
   }
+  // Valeur écrite = écart jusqu'à la note suivante de la même piste (le jeu « à la main » raccourcit les notes)
+  const byTrk = {};
+  ons.forEach(o => { (byTrk[o.trk] = byTrk[o.trk] || new Set()).add(o.tick); });
+  for (const k in byTrk) byTrk[k] = [...byTrk[k]].sort((a, b) => a - b);
+  ons.forEach(o => { const arr = byTrk[o.trk], i = arr.indexOf(o.tick), gap = i + 1 < arr.length ? arr[i + 1] - o.tick : o.dur; o.val = o.dur >= gap * 1.4 ? o.dur : gap; });
   ons.sort((a, b) => a.tick - b.tick);
   const steps = [];                                        // notes simultanées = un accord
   ons.forEach(o => {
     const l = steps[steps.length - 1];
-    if (l && o.tick - l.tick <= tpq / 16) { if (!l.midis.includes(o.midi)) { l.midis.push(o.midi); l.durs.push(o.dur); } }
-    else steps.push({ tick: o.tick, midis: [o.midi], durs: [o.dur] });
+    if (l && o.tick - l.tick <= tpq / 16) { if (!l.midis.includes(o.midi)) { l.midis.push(o.midi); l.durs.push(o.val); } }
+    else steps.push({ tick: o.tick, midis: [o.midi], durs: [o.val] });
   });
   const tpm = tpq * 4 * num / den;
   return { steps, tpq, tpm, bpm: bpm || 100, measures: Math.floor(steps[steps.length - 1].tick / tpm) + 1 };
@@ -739,25 +753,33 @@ function startPractice() {
   const steps = song.steps.filter(s => { const m = Math.floor(s.tick / song.tpm) + 1; return m >= m1 && m <= m2; })
     .map(s => ({ tick: s.tick, midis: s.midis, durs: s.durs, got: [], done: false, missed: false }));
   if (!steps.length) { $('res').textContent = 'Aucune note dans cette plage.'; return; }
+  const bpm = Math.max(20, Math.round(song.bpm * $('speed').value / 100));   // tempo = tempo du fichier x vitesse choisie
+  $('bpm').value = bpm; applySettings();                                       // le métronome suit
   const tick0 = (m1 - 1) * song.tpm - 2 * song.tpq;       // décompte de 2 temps
-  pr = { steps, tpq: song.tpq, tpm: song.tpm, bpm: +$('bpm').value, m1, m2, tick0, cur: tick0, t0: performance.now(),
+  pr = { steps, tpq: song.tpq, tpm: song.tpm, bpm, wait: $('wait').checked, m1, m2, tick0, cur: tick0,
          end: m2 * song.tpm, hits: 0, wrong: 0, deltas: [], over: false };
   $('res').textContent = ''; startMet();
 }
 $('start').addEventListener('click', startPractice);
-function curTick(now) { return pr.tick0 + (now - pr.t0) * pr.bpm * pr.tpq / 60000; }
-function updatePractice() {
+$('speed').addEventListener('input', e => { $('speedVal').textContent = e.target.value; });
+function updatePractice(dt) {
   if (!pr || pr.over) return;
-  pr.cur = curTick(performance.now());
-  pr.steps.forEach(s => { if (!s.done && !s.missed && pr.cur - s.tick > pr.tpq * 0.5) s.missed = true; });   // trop tard : raté
+  let adv = dt * pr.bpm / 60 * pr.tpq;                     // avancement de l'horloge musicale, en ticks
+  if (pr.wait) {                                           // mode attente : arrêt sur la première note non jouée
+    const s = pr.steps.find(s => !s.done);
+    if (s && pr.cur + adv > s.tick) adv = Math.max(0, s.tick - pr.cur);
+  }
+  pr.cur += adv;
+  if (!pr.wait) pr.steps.forEach(s => { if (!s.done && !s.missed && pr.cur - s.tick > pr.tpq * 0.5) s.missed = true; });   // trop tard : raté
   if (pr.cur > pr.end + pr.tpq) finishPractice();
 }
-function practiceHit(midi, now) {
+function practiceHit(midi) {
   if (!pr || pr.over) return;
-  const cur = curTick(now);
-  const s = pr.steps.find(s => !s.done && !s.missed && s.midis.includes(midi) && !s.got.includes(midi) && Math.abs(cur - s.tick) <= pr.tpq * 0.5);
-  if (!s) { pr.wrong++; return; }                          // note absente de la partition à ce moment
-  s.got.push(midi); pr.hits++; pr.deltas.push((cur - s.tick) * 60000 / (pr.bpm * pr.tpq));
+  const w = pr.tpq * 0.5;
+  const s = pr.wait ? pr.steps.find(s => !s.done)          // attente : seule la prochaine note compte
+    : pr.steps.find(s => !s.done && !s.missed && s.midis.includes(midi) && !s.got.includes(midi) && Math.abs(pr.cur - s.tick) <= w);
+  if (!s || !s.midis.includes(midi) || s.got.includes(midi)) { pr.wrong++; return; }   // note absente de la partition à ce moment
+  s.got.push(midi); pr.hits++; pr.deltas.push((pr.cur - s.tick) * 60000 / (pr.bpm * pr.tpq));
   if (s.got.length === s.midis.length) s.done = true;
 }
 function finishPractice() {
@@ -767,6 +789,7 @@ function finishPractice() {
   $('res').innerHTML = 'Notes justes : <b>' + pr.hits + '/' + tot + '</b> · ratées : <b>' + (tot - pr.hits) + '</b> · fausses notes : <b>' + pr.wrong + '</b><br>' +
     'Écart moyen : <b>' + Math.round(abs) + ' ms</b> (' + (avg > 20 ? 'plutôt en retard' : avg < -20 ? 'plutôt en avance' : 'bien centré') + ')<br>' +
     'Dans le rythme (±100 ms) : <b>' + (n ? Math.round(100 * d.filter(x => Math.abs(x) < 100).length / n) : 0) + ' %</b>';
+  if (pr.wait) $('res').innerHTML = 'Notes justes : <b>' + pr.hits + '/' + tot + '</b> · fausses notes : <b>' + pr.wrong + '</b><br>(mode attente : pas de statistique de rythme)';
 }
 
 /* ---------- Canvas HiDPI + boucle ---------- */
