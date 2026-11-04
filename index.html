@@ -58,6 +58,19 @@
   .tools input[type=number] { width:56px; padding:5px; color:var(--ink); background:var(--card); border:1px solid var(--line); border-radius:6px; }
   #res { font:.95rem/1.5 system-ui,sans-serif; margin:8px 0; min-height:1.2em; }
   #ver { font:.75rem system-ui,sans-serif; color:var(--muted); }
+  body[data-screen="home"] main > :not(header):not(#home) { display:none !important; }
+  body[data-screen="home"] #back, body:not([data-screen="home"]) #home { display:none; }
+  #home .lead { font:1rem system-ui,sans-serif; color:var(--muted); margin:0 0 12px; }
+  .tiles { display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:14px; }
+  .tile { display:flex; flex-direction:column; gap:6px; text-align:left; padding:12px; font:inherit; color:var(--ink);
+    background:var(--card); border:1px solid var(--line); border-radius:14px; cursor:pointer; }
+  .tile:active { transform:scale(.98); }
+  .tile svg { width:100%; height:auto; background:var(--bg); border-radius:8px; }
+  .tile b { font:600 1.1rem system-ui,sans-serif; } .tile span { font:.9rem system-ui,sans-serif; color:var(--muted); }
+  #back { padding:4px 10px; font:600 .85rem system-ui,sans-serif; color:var(--ink); background:var(--btn); border:1px solid var(--line); border-radius:6px; cursor:pointer; }
+  .s { fill:none; stroke:var(--ink); stroke-width:1.2; } .f { fill:var(--ink); } .w { fill:#fff; stroke:#000; stroke-width:1; }
+  .r { fill:var(--accent); stroke:var(--accent); stroke-width:2.5; } .g { fill:#2a9d4a; }
+  .credit { font:.75rem system-ui,sans-serif; color:var(--muted); margin:6px 0; }
   .tools label { display:flex; align-items:center; gap:4px; } .tools input[type=range] { width:90px; }
   #panel { display:none; position:fixed; inset:0; z-index:50; align-items:center; justify-content:center; padding:16px; background:rgba(0,0,0,.45); }
   #panel.open { display:flex; }
@@ -91,12 +104,34 @@
   }
 </style>
 </head>
-<body>
+<body data-screen="home" data-mode="dictee">
 <main>
   <header><h1>Lecture à vue – piano</h1>
     <span id="ver"></span>
-    <select id="mode" aria-label="Mode"><option value="dictee">Dictée de note</option><option value="record">S’enregistrer</option><option value="practice">S’entraîner sur un morceau</option></select>
+    <button id="back" type="button" aria-label="Retour à l’accueil">⌂ Accueil</button>
     <button id="gear" type="button" aria-label="Paramètres">⚙︎</button></header>
+  <section id="home">
+    <p class="lead">Que voulez-vous travailler aujourd’hui ?</p>
+    <div class="tiles">
+      <button class="tile" type="button" data-m="dictee">
+        <svg viewBox="0 0 200 90" aria-hidden="true"><path class="s" d="M10 25H190M10 35H190M10 45H190M10 55H190M10 65H190"/>
+          <g class="f"><ellipse cx="50" cy="50" rx="7" ry="5" transform="rotate(-20 50 50)"/><ellipse cx="85" cy="35" rx="7" ry="5" transform="rotate(-20 85 35)"/><ellipse cx="120" cy="60" rx="7" ry="5" transform="rotate(-20 120 60)"/></g>
+          <path class="s" d="M56 49V20M79 36V63M126 59V30"/><path class="r" d="M150 12V78"/></svg>
+        <b>Dictée de note</b><span>Reconnaissez les notes qui défilent sur la double portée.</span></button>
+      <button class="tile" type="button" data-m="record">
+        <svg viewBox="0 0 200 90" aria-hidden="true">
+          <g class="w"><rect x="23" y="26" width="22" height="56"/><rect x="45" y="26" width="22" height="56"/><rect x="67" y="26" width="22" height="56"/><rect x="89" y="26" width="22" height="56"/><rect x="111" y="26" width="22" height="56"/><rect x="133" y="26" width="22" height="56"/><rect x="155" y="26" width="22" height="56"/></g>
+          <g class="f"><rect x="38" y="26" width="14" height="34"/><rect x="60" y="26" width="14" height="34"/><rect x="104" y="26" width="14" height="34"/><rect x="126" y="26" width="14" height="34"/><rect x="148" y="26" width="14" height="34"/></g>
+          <circle class="r" cx="178" cy="12" r="6"/></svg>
+        <b>S’enregistrer</b><span>Jouez sur votre piano : vos notes deviennent une partition, exportable en .mid.</span></button>
+      <button class="tile" type="button" data-m="practice">
+        <svg viewBox="0 0 200 90" aria-hidden="true"><path class="s" d="M10 25H190M10 35H190M10 45H190M10 55H190M10 65H190"/>
+          <g class="g"><ellipse cx="25" cy="55" rx="7" ry="5" transform="rotate(-20 25 55)"/><ellipse cx="60" cy="45" rx="7" ry="5" transform="rotate(-20 60 45)"/></g>
+          <g class="f"><ellipse cx="115" cy="35" rx="7" ry="5" transform="rotate(-20 115 35)"/><ellipse cx="150" cy="50" rx="7" ry="5" transform="rotate(-20 150 50)"/><ellipse cx="185" cy="30" rx="7" ry="5" transform="rotate(-20 185 30)"/></g>
+          <path class="s" d="M31 54V26M66 44V16M121 34V6M156 49V21M191 29V1"/><path class="r" d="M90 12V78"/><path class="r" d="M90 5L102 11L90 17Z"/></svg>
+        <b>S’entraîner sur un morceau</b><span>Importez un fichier .mid et suivez la partition au piano, mesure par mesure.</span></button>
+    </div>
+  </section>
   <div class="stats dict-only">
     <span>Réponses : <b id="sRatio">0/0</b></span>
     
@@ -130,8 +165,10 @@
   <div class="row"><label><input type="checkbox" id="hideNames"> Masquer les notes sur le piano</label></div>
   <div class="row"><label><input type="checkbox" id="showDur" checked> Afficher les durées (ronde, blanche, noire, croche)</label></div>
   <div class="row"><label><input type="checkbox" id="sound" checked> Son des notes</label></div>
+  <div class="row"><label><input type="checkbox" id="realPiano" checked> Sons de piano réalistes (téléchargés une fois, ~5 Mo)</label></div>
   <div class="row"><label><input type="checkbox" id="strictOct" checked> Octave exacte</label></div>
   <div class="row">Clavier (enregistrer / s’entraîner) <select id="octs"><option>1</option><option selected>2</option><option>3</option><option>4</option><option>5</option></select> octaves</div>
+  <p class="credit">Échantillons de piano : Salamander Grand Piano (A. Holm), licence CC-BY 3.0, via Tone.js.</p>
   <div class="row"><button id="closeP" type="button">Fermer</button></div>
 </div></div>
 
@@ -427,6 +464,7 @@ document.addEventListener('keydown', e => {
 let audioCtx = null, masterBus = null;
 function playNote(midi) {
   if (!document.getElementById('sound').checked) return;
+  if (playSampled(midi)) return;                          // vrais échantillons de piano si disponibles
   try {
     if (!audioCtx) {
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -473,6 +511,44 @@ function tap(letter, octave) {
   checkAnswer(letter);
 }
 
+/* ---------- Sons réalistes : échantillons du Salamander Grand Piano ----------
+   Fichiers MP3 tous les 3 demi-tons (A, C, D#, F#) ; les notes intermédiaires sont obtenues en
+   modifiant la vitesse de lecture. Sans connexion au 1er lancement, on garde le synthé ci-dessous. */
+const SAMPLE_BASE = 'https://tonejs.github.io/audio/salamander/';
+const SAMPLE_ROOTS = [{ n: 'A0', m: 21 }];
+for (let o = 1; o <= 7; o++) [['C', 0], ['Ds', 3], ['Fs', 6], ['A', 9]].forEach(r => SAMPLE_ROOTS.push({ n: r[0] + o, m: 12 * (o + 1) + r[1] }));
+SAMPLE_ROOTS.push({ n: 'C8', m: 108 });
+const samples = {}, sampleState = {};
+let preloading = false;
+
+async function loadSample(r) {
+  if (sampleState[r.m]) return;
+  sampleState[r.m] = 'loading';
+  try {
+    const res = await fetch(SAMPLE_BASE + r.n + '.mp3'); if (!res.ok) throw 0;
+    samples[r.m] = await getAC().decodeAudioData(await res.arrayBuffer());
+    sampleState[r.m] = 'ok';
+  } catch (e) { sampleState[r.m] = 'err'; }
+}
+/* Télécharge en arrière-plan les échantillons de Do2 à Do7 (3 à la fois) */
+async function preloadSamples() {
+  if (preloading) return; preloading = true;
+  const list = SAMPLE_ROOTS.filter(r => r.m >= 36 && r.m <= 96); let i = 0;
+  const worker = async () => { while (i < list.length) await loadSample(list[i++]); };
+  await Promise.all([worker(), worker(), worker()]);
+}
+function playSampled(midi) {
+  if (!$('realPiano').checked) return false;
+  const near = SAMPLE_ROOTS.slice().sort((a, b) => Math.abs(a.m - midi) - Math.abs(b.m - midi));
+  const r = near.find(q => samples[q.m]);                  // échantillon chargé le plus proche
+  if (!r || Math.abs(r.m - midi) > 6) { loadSample(near[0]); return false; }
+  const ac = getAC(), src = ac.createBufferSource(), g = ac.createGain(), t = ac.currentTime;
+  src.buffer = samples[r.m]; src.playbackRate.value = Math.pow(2, (midi - r.m) / 12);
+  g.gain.setValueAtTime(0.8, t); g.gain.setTargetAtTime(0, t + 2.5, 0.7);     // résonance puis extinction douce
+  src.connect(g); g.connect(masterBus); src.start(t); src.stop(t + 6.5);
+  return true;
+}
+
 /* ---------- Piano MIDI (Web MIDI API) ----------
    Un piano numérique envoie des messages MIDI : "note on" = 0x90, puis numéro de note
    (C4 = 60) et vélocité. On convertit ce numéro en note de la partition. */
@@ -514,11 +590,11 @@ try { navigator.permissions.query({ name: 'midi' }).then(p => { if (p.state === 
 
 /* ================= Réglages, métronome, modes ================= */
 const $ = id => document.getElementById(id);
-const APP_VERSION = 'v11';          // à garder identique au numéro de cache dans sw.js
+const APP_VERSION = 'v12';          // à garder identique au numéro de cache dans sw.js
 $('ver').textContent = APP_VERSION;
 const PCS = [0, 2, 4, 5, 7, 9, 11];
 let mode = 'dictee';
-const SETTINGS = ['metOn', 'bpm', 'metVol', 'metSound', 'theme', 'sound', 'strictOct', 'octs', 'hideNames', 'showDur'];
+const SETTINGS = ['metOn', 'bpm', 'metVol', 'metSound', 'theme', 'sound', 'strictOct', 'octs', 'hideNames', 'showDur', 'realPiano'];
 
 /* --- Réglages sauvegardés dans localStorage --- */
 function saveSettings() {
@@ -535,6 +611,7 @@ function loadSettings() {
 function applySettings() {
   document.documentElement.dataset.theme = $('theme').value;
   document.body.classList.toggle('hide-names', $('hideNames').checked);
+  if ($('realPiano').checked) preloadSamples();
   $('bpmVal').textContent = $('bpm').value;
   startMet();
 }
@@ -573,12 +650,14 @@ function click(t, accent) {            // premier temps de mesure : plus aigu
 /* --- Modes --- */
 let recNotes = [], openN = {}, t0rec = 0, pr = null, song = null;
 function setMode(m) {
-  mode = m; document.body.dataset.mode = m; $('mode').value = m;
+  mode = m; document.body.dataset.mode = m;
   recNotes = []; openN = {}; pr = null; $('res').textContent = '';
   if (m === 'dictee') restart();
   buildKeyboard();
 }
-$('mode').addEventListener('change', e => setMode(e.target.value));
+function openMode(m) { setMode(m); document.body.dataset.screen = 'app'; resize(); window.scrollTo(0, 0); }
+document.querySelectorAll('.tile').forEach(t => t.addEventListener('click', () => openMode(t.dataset.m)));
+$('back').addEventListener('click', () => { document.body.dataset.screen = 'home'; });
 
 /* Une note jouée (clavier écran ou piano MIDI) en mode enregistrement / entraînement */
 function noteOn(midi, fromMidi) {
@@ -645,20 +724,30 @@ function drawMidiNote(x, midi, col, kind) {
   if (p.sharp) { ctx.font = (3.4 * H) + 'px serif'; ctx.fillText('\u266F', x - 4.2 * H, noteToY(p.idx) + 1.1 * H); }
 }
 
+/* Instant musical (ticks) -> position horizontale (unités de H), en suivant la disposition aérée des notes */
+function tickToU(tk) {
+  const st = pr.steps, n = st.length;
+  if (tk <= st[0].tick) return st[0].X - (st[0].tick - tk) / pr.tpq * 11.5;
+  if (tk >= st[n - 1].tick) return st[n - 1].X + (tk - st[n - 1].tick) / pr.tpq * 11.5;
+  let lo = 0, hi = n - 1;
+  while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (st[mid].tick <= tk) lo = mid; else hi = mid; }
+  return st[lo].X + (tk - st[lo].tick) / (st[hi].tick - st[lo].tick) * (st[hi].X - st[lo].X);
+}
+
 function renderSong(ink, red) {
   if (mode === 'record') {                                // les dernières notes jouées, la plus récente à droite
     // Notes jouées à moins de 100 ms d'écart = même accord (même colonne)
     const groups = [];
     recNotes.forEach(n => { const g = groups[groups.length - 1]; if (g && n.t - g.t <= 100) g.notes.push(n); else groups.push({ t: n.t, notes: [n] }); });
     groups.forEach((g, i) => {
-      const x = W - 40 - (groups.length - 1 - i) * 56; if (x <= 100) return;
+      const x = W - 40 - (groups.length - 1 - i) * Math.round(10.8 * H); if (x <= 100) return;
       const d = Math.max(...g.notes.map(n => openN[n.midi] === n ? performance.now() - t0rec - n.t : n.d));   // note tenue : durée en cours
       drawChord(x, g.notes.map(n => n.midi), ink, durKind(d * $('bpm').value / 60000));
     });
     return;
   }
   if (!pr) return;
-  const px = tk => READ_X + (tk - pr.cur) / pr.tpq * 80;  // 80 px par temps
+  const u0 = tickToU(pr.cur), px = tk => READ_X + (tickToU(tk) - u0) * H;   // position écran d'un instant musical
   const yT = noteToY(TREBLE_LINES[4]), yB = noteToY(BASS_LINES[0]);
   setInk(ink); ctx.lineWidth = 1; ctx.font = '11px system-ui';
   for (let m = pr.m1; m <= pr.m2 + 1; m++) {              // barres de mesure numérotées
@@ -753,6 +842,9 @@ function startPractice() {
   const steps = song.steps.filter(s => { const m = Math.floor(s.tick / song.tpm) + 1; return m >= m1 && m <= m2; })
     .map(s => ({ tick: s.tick, midis: s.midis, durs: s.durs, got: [], done: false, missed: false }));
   if (!steps.length) { $('res').textContent = 'Aucune note dans cette plage.'; return; }
+  // Disposition horizontale (en unités de H) : proportionnelle au temps, mais avec au moins 3 diamètres de tête libres entre deux notes
+  const BEAT_U = 11.5, MIN_U = 10.8; let X = 0;
+  steps.forEach((s, i) => { if (i) X += Math.max(MIN_U, (s.tick - steps[i - 1].tick) / song.tpq * BEAT_U); s.X = X; });
   const bpm = Math.max(20, Math.round(song.bpm * $('speed').value / 100));   // tempo = tempo du fichier x vitesse choisie
   $('bpm').value = bpm; applySettings();                                       // le métronome suit
   const tick0 = (m1 - 1) * song.tpm - 2 * song.tpq;       // décompte de 2 temps
