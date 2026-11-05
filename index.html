@@ -73,6 +73,23 @@
   .s { fill:none; stroke:var(--ink); stroke-width:1.2; } .f { fill:var(--ink); } .w { fill:#fff; stroke:#000; stroke-width:1; }
   .r { fill:var(--accent); stroke:var(--accent); stroke-width:2.5; } .g { fill:#2a9d4a; }
   .credit { font:.75rem system-ui,sans-serif; color:var(--muted); margin:6px 0; }
+  /* En-tête : connexion MIDI et intervalle de notes */
+  header { flex-wrap:wrap; }
+  header .range, header .midi { flex:0 0 100%; margin:0 0 8px; }
+  header .midi { order:6; } header .range { order:7; }
+  body[data-screen="home"] header .range, body[data-screen="home"] header .midi { display:none; }
+  @media (orientation: landscape) {
+    /* Une seule ligne : Accueil | intervalle (au centre) | MIDI | version | réglages */
+    header { flex-wrap:nowrap; gap:8px; margin:0 0 6px; }
+    header #back { order:1; }
+    header .range { order:2; flex:0 0 auto; margin:0 auto; white-space:nowrap; }
+    header .midi { order:3; flex:0 0 auto; margin:0; flex-wrap:nowrap; gap:6px; }
+    header #ver { order:4; } header #gear { order:5; }
+    body[data-screen="home"] header #ver { margin-left:auto; }
+    body:not([data-mode="dictee"]) header .midi { margin-left:auto; }
+    header .midi button, header .range select { font-size:.8rem; padding:3px 8px; }
+    #midiStatus { max-width:26vw; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:.8rem; }
+  }
   .tools label { display:flex; align-items:center; gap:4px; } .tools input[type=range] { width:90px; }
   #panel { display:none; position:fixed; inset:0; z-index:50; align-items:center; justify-content:center; padding:16px; background:rgba(0,0,0,.45); }
   #panel.open { display:flex; }
@@ -111,6 +128,8 @@
   <header><h1>Lecture à vue – piano</h1>
     <span id="ver"></span>
     <button id="back" type="button" aria-label="Retour à l’accueil">⌂ Accueil</button>
+    <div class="range dict-only">Notes de <select id="rangeLo" aria-label="Première note"></select> à <select id="rangeHi" aria-label="Dernière note"></select></div>
+    <div class="midi"><button id="midiBtn" type="button">Connecter le piano (MIDI)</button><span id="midiStatus">Aucun piano connecté</span></div>
     <button id="gear" type="button" aria-label="Paramètres">⚙︎</button></header>
   <section id="home">
     <p class="lead">Que voulez-vous travailler aujourd’hui ?</p>
@@ -141,8 +160,6 @@
     <span>Vitesse : <b id="sRate">0,0</b> notes/s · <b id="sPace">–</b> s/note</span>
     <button id="restart" type="button">Redémarrer</button>
   </div>
-  <div class="midi"><button id="midiBtn" type="button">Connecter le piano (MIDI)</button><span id="midiStatus">Aucun piano connecté</span></div>
-  <div class="range dict-only">Notes de <select id="rangeLo" aria-label="Première note"></select> à <select id="rangeHi" aria-label="Dernière note"></select></div>
   <div id="wrap"><canvas id="cv"></canvas></div>
   <div id="msg" class="dict-only"></div>
   <div class="tools">
@@ -599,7 +616,7 @@ try { navigator.permissions.query({ name: 'midi' }).then(p => { if (p.state === 
 
 /* ================= Réglages, métronome, modes ================= */
 const $ = id => document.getElementById(id);
-const APP_VERSION = 'v14';          // à garder identique au numéro de cache dans sw.js
+const APP_VERSION = 'v15';          // à garder identique au numéro de cache dans sw.js
 $('ver').textContent = APP_VERSION;
 
 /* --- Intervalle de la dictée : listes Do2 ... Si5 --- */
