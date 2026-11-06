@@ -182,6 +182,7 @@
   <div class="row">Volume du clac <input type="range" id="metVol" min="0" max="100" value="60"></div>
   <div class="row">Son du clac <select id="metSound"><option value="bois">Bois</option><option value="clic">Clic</option><option value="cloche">Cloche</option><option value="tic">Tic</option><option value="basse">Basse</option></select></div>
   <div class="row">Thème <select id="theme"><option value="light">Mode clair</option><option value="dark">Mode sombre</option></select></div>
+  <div class="row"><label><input type="checkbox" id="hilite"> Mettre en avant les notes à jouer (bleu ; dièses en rouge)</label></div>
   <div class="row"><label><input type="checkbox" id="hideNames"> Masquer les notes sur le piano</label></div>
   <div class="row"><label><input type="checkbox" id="showDur" checked> Afficher les durées (ronde, blanche, noire, croche)</label></div>
   <div class="row"><label><input type="checkbox" id="sound" checked> Son des notes</label></div>
@@ -355,7 +356,7 @@ function render() {
   if (mode !== 'dictee') { renderSong(ink, red); return; }
   notes.forEach((n, i) => {
     const x = READ_X + offset + i * SPACING;
-    if (x < W + 20) { setInk(ink); drawNote(x, n.idx); }
+    if (x < W + 20) { setInk(i === 0 && $('hilite').checked ? HI_BLUE : ink); drawNote(x, n.idx); }
   });
   // Zone de lecture
   const flash = performance.now() < flashUntil;
@@ -616,7 +617,7 @@ try { navigator.permissions.query({ name: 'midi' }).then(p => { if (p.state === 
 
 /* ================= Réglages, métronome, modes ================= */
 const $ = id => document.getElementById(id);
-const APP_VERSION = 'v17';          // à garder identique au numéro de cache dans sw.js
+const APP_VERSION = 'v18';          // à garder identique au numéro de cache dans sw.js
 $('ver').textContent = APP_VERSION;
 
 /* --- Intervalle de la dictée : listes Do2 ... Si5 --- */
@@ -633,7 +634,7 @@ function rangeChanged(e) {
 $('rangeLo').addEventListener('change', rangeChanged); $('rangeHi').addEventListener('change', rangeChanged);
 const PCS = [0, 2, 4, 5, 7, 9, 11];
 let mode = 'dictee';
-const SETTINGS = ['metOn', 'bpm', 'metVol', 'metSound', 'theme', 'sound', 'strictOct', 'octs', 'hideNames', 'showDur', 'realPiano', 'rangeLo', 'rangeHi'];
+const SETTINGS = ['metOn', 'bpm', 'metVol', 'metSound', 'theme', 'sound', 'strictOct', 'octs', 'hideNames', 'showDur', 'realPiano', 'rangeLo', 'rangeHi', 'hilite'];
 
 /* --- Réglages sauvegardés dans localStorage --- */
 function saveSettings() {
@@ -720,6 +721,7 @@ function midiToPos(m) {
    ou un tableau (une forme par note). Si les durées diffèrent, l'accord est coupé en deux voix :
    les notes les plus longues d'un côté, les autres de l'autre, avec des hampes opposées. */
 const KIND_ORDER = { w: 4, h: 3, q: 2, e: 1, s: 0 };
+const HI_BLUE = '#1f6feb', HI_RED = '#e5383b';      // mise en avant : notes naturelles en bleu, dièses (touches noires) en rouge
 function drawChord(x, midis, col, kinds) {
   const ks = Array.isArray(kinds) ? kinds : midis.map(() => kinds);
   const top = Math.max(...ks.map(k => KIND_ORDER[k]));
@@ -739,11 +741,11 @@ function drawVoice(x, midis, col, kind, dir) {
   const rx = 1.35 * H, mean = ps.reduce((a, q) => a + q.idx, 0) / ps.length;
   const down = dir ? dir === 'down' : mean >= (mean >= IDX_C4 ? TREBLE_MID : BASS_MID);
   let prev = null, shifted = false, nSharp = 0;
-  setInk(col);
+  const cOf = typeof col === 'function' ? col : () => col;   // couleur fixe, ou fonction midi -> couleur
   ps.forEach(q => {
     shifted = !!prev && q.idx - prev.idx <= 1 && !shifted;
     const dx = shifted ? (down ? -2 * rx + 2 : 2 * rx - 2) : 0;
-    drawNote(x + dx, q.idx, kind, true);                     // têtes seulement
+    setInk(cOf(q.m)); drawNote(x + dx, q.idx, kind, true);                     // têtes seulement
     if (q.sharp) {                                           // dièses décalés pour ne pas se chevaucher
       ctx.font = (3.4 * H) + 'px serif';
       ctx.fillText('\u266F', x + Math.min(dx, 0) - 4.2 * H - (nSharp++ % 2) * 2.2 * H, noteToY(q.idx) + 1.1 * H);
@@ -751,6 +753,7 @@ function drawVoice(x, midis, col, kind, dir) {
     prev = q;
   });
   if (kind === 'w') return;                                  // pas de hampe pour la ronde
+  setInk(cOf(ps[0].m));
   const lo = noteToY(ps[0].idx), hi = noteToY(ps[ps.length - 1].idx);   // lo = note la plus grave (y grand)
   const sx = down ? x - rx + 1 : x + rx - 1, ys = down ? hi : lo, ye = down ? lo + 7 * H : hi - 7 * H;
   ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(sx, ys); ctx.lineTo(sx, ye); ctx.stroke();
@@ -809,9 +812,11 @@ function renderSong(ink, red) {
     const x = px((m - 1) * pr.tpm);
     if (x > 90 && x < W) { ctx.beginPath(); ctx.moveTo(x, yT); ctx.lineTo(x, yB); ctx.stroke(); ctx.fillText(m, x + 3, yT - 6); }
   }
+  const nxt = $('hilite').checked ? pr.steps.find(t => !t.done && !t.missed) : null;   // prochain à jouer
   pr.steps.forEach(s => {
     const x = px(s.tick); if (x < 90 || x > W + 20) return;
-    drawChord(x, s.midis, s.done ? '#2a9d4a' : s.missed ? red : ink, s.durs.map(d => durKind(d / pr.tpq)));
+    const col = s.done ? '#2a9d4a' : s.missed ? red : s === nxt ? (m => midiToPos(m).sharp ? HI_RED : HI_BLUE) : ink;
+    drawChord(x, s.midis, col, s.durs.map(d => durKind(d / pr.tpq)));
   });
   ctx.strokeStyle = red; ctx.lineWidth = 2.5;
   ctx.beginPath(); ctx.moveTo(READ_X, noteToY(MAX_IDX + 3)); ctx.lineTo(READ_X, noteToY(MIN_IDX - 2)); ctx.stroke();
