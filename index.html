@@ -103,6 +103,10 @@
   body:not([data-mode="record"]) .rec-only, body:not([data-mode="practice"]) .prac-only { display:none; }
   body:not([data-mode="dictee"]) #kb { display:block; height:auto; }
   .hide-names .wk span, .hide-names .wk small { visibility:hidden; }
+  /* Touche à jouer mise en avant : blanche -> bleue, noire -> rouge */
+  .wk.hl { background:#1f6feb !important; } .wk.hl span, .wk.hl small, .wk.hl sub { color:#fff; }
+  .bk.hl { background:#e5383b !important; }
+  .cell button.hl { background:#1f6feb !important; color:#fff; }
   #kb { overflow-x:auto; } #kbi { position:relative; height:104px; }
   /* Clavier 2 octaves (visible en paysage uniquement) */
   #kb { display:none; position:relative; height:104px; user-select:none; -webkit-user-select:none; touch-action:manipulation; }
@@ -182,7 +186,7 @@
   <div class="row">Volume du clac <input type="range" id="metVol" min="0" max="100" value="60"></div>
   <div class="row">Son du clac <select id="metSound"><option value="bois">Bois</option><option value="clic">Clic</option><option value="cloche">Cloche</option><option value="tic">Tic</option><option value="basse">Basse</option></select></div>
   <div class="row">Thème <select id="theme"><option value="light">Mode clair</option><option value="dark">Mode sombre</option></select></div>
-  <div class="row"><label><input type="checkbox" id="hilite"> Mettre en avant les notes à jouer (bleu ; dièses en rouge)</label></div>
+  <div class="row"><label><input type="checkbox" id="hilite"> Mettre en avant la touche à jouer sur le piano (bleue ; touches noires en rouge)</label></div>
   <div class="row"><label><input type="checkbox" id="hideNames"> Masquer les notes sur le piano</label></div>
   <div class="row"><label><input type="checkbox" id="showDur" checked> Afficher les durées (ronde, blanche, noire, croche)</label></div>
   <div class="row"><label><input type="checkbox" id="sound" checked> Son des notes</label></div>
@@ -356,7 +360,7 @@ function render() {
   if (mode !== 'dictee') { renderSong(ink, red); return; }
   notes.forEach((n, i) => {
     const x = READ_X + offset + i * SPACING;
-    if (x < W + 20) { setInk(i === 0 && $('hilite').checked ? HI_BLUE : ink); drawNote(x, n.idx); }
+    if (x < W + 20) { setInk(ink); drawNote(x, n.idx); }
   });
   // Zone de lecture
   const flash = performance.now() < flashUntil;
@@ -430,7 +434,7 @@ function buildPad() {
   const pad = document.getElementById('pad');
   LETTERS.forEach(l => {
     const cell = document.createElement('div'); cell.className = 'cell';
-    const btn = document.createElement('button'); btn.textContent = FR[l];
+    const btn = document.createElement('button'); btn.textContent = FR[l]; btn.dataset.l = l;
     btn.addEventListener('click', () => tap(l, 4));
     const inp = document.createElement('input');
     inp.maxLength = 1; inp.value = bindings[l]; inp.setAttribute('aria-label', 'Touche pour ' + FR[l]);
@@ -446,9 +450,10 @@ function buildPad() {
    14 touches blanches (Do Ré Mi Fa Sol La Si x2). Cliquer une touche répond avec
    sa lettre ; les touches noires sont décoratives (pas de dièses/bémols). */
 const kbLabels = {};
+const kbKeys = []; let kbGen = 0;        // touches du piano à l'écran : { el, midi, black }
 let kbLo = 0, kbHi = 0;                  // degrés diatoniques couverts par le clavier affiché
 function buildKeyboard() {
-  const kb = $('kb'); kb.innerHTML = '';
+  const kb = $('kb'); kb.innerHTML = ''; kbKeys.length = 0; kbGen++;
   Object.keys(kbLabels).forEach(k => delete kbLabels[k]);
   const rec = mode !== 'dictee', N = +$('octs').value, start = ({1:4, 2:3, 3:3, 4:2, 5:2})[N], T = N * 7, w = 100 / T;
   kbLo = start * 7; kbHi = (start + N) * 7 - 1;
@@ -461,13 +466,13 @@ function buildKeyboard() {
     if (!rec) (kbLabels[l] = kbLabels[l] || []).push(el.lastChild);
     el.addEventListener('pointerdown', e => { e.preventDefault(); if (rec) noteOn(midi); else tap(l, oct, true); });
     if (rec) ['pointerup', 'pointerleave'].forEach(ev => el.addEventListener(ev, () => noteOff(midi)));
-    inner.appendChild(el);
+    inner.appendChild(el); kbKeys.push({ el, midi, black: false });
     if (l !== 'E' && l !== 'B') {                      // touche noire (jouable en mode enregistrement)
       const bk = document.createElement('div'); bk.className = 'bk';
       bk.style.width = (w * 0.6) + '%'; bk.style.left = ((i + 1) * w - w * 0.3) + '%';
       if (rec) { bk.addEventListener('pointerdown', e => { e.preventDefault(); noteOn(midi + 1); });
         ['pointerup', 'pointerleave'].forEach(ev => bk.addEventListener(ev, () => noteOff(midi + 1))); }
-      inner.appendChild(bk);
+      inner.appendChild(bk); kbKeys.push({ el: bk, midi: midi + 1, black: true });
     }
   }
   refreshKeyLabels();
@@ -617,7 +622,7 @@ try { navigator.permissions.query({ name: 'midi' }).then(p => { if (p.state === 
 
 /* ================= Réglages, métronome, modes ================= */
 const $ = id => document.getElementById(id);
-const APP_VERSION = 'v18';          // à garder identique au numéro de cache dans sw.js
+const APP_VERSION = 'v19';          // à garder identique au numéro de cache dans sw.js
 $('ver').textContent = APP_VERSION;
 
 /* --- Intervalle de la dictée : listes Do2 ... Si5 --- */
@@ -721,7 +726,6 @@ function midiToPos(m) {
    ou un tableau (une forme par note). Si les durées diffèrent, l'accord est coupé en deux voix :
    les notes les plus longues d'un côté, les autres de l'autre, avec des hampes opposées. */
 const KIND_ORDER = { w: 4, h: 3, q: 2, e: 1, s: 0 };
-const HI_BLUE = '#1f6feb', HI_RED = '#e5383b';      // mise en avant : notes naturelles en bleu, dièses (touches noires) en rouge
 function drawChord(x, midis, col, kinds) {
   const ks = Array.isArray(kinds) ? kinds : midis.map(() => kinds);
   const top = Math.max(...ks.map(k => KIND_ORDER[k]));
@@ -812,10 +816,9 @@ function renderSong(ink, red) {
     const x = px((m - 1) * pr.tpm);
     if (x > 90 && x < W) { ctx.beginPath(); ctx.moveTo(x, yT); ctx.lineTo(x, yB); ctx.stroke(); ctx.fillText(m, x + 3, yT - 6); }
   }
-  const nxt = $('hilite').checked ? pr.steps.find(t => !t.done && !t.missed) : null;   // prochain à jouer
   pr.steps.forEach(s => {
     const x = px(s.tick); if (x < 90 || x > W + 20) return;
-    const col = s.done ? '#2a9d4a' : s.missed ? red : s === nxt ? (m => midiToPos(m).sharp ? HI_RED : HI_BLUE) : ink;
+    const col = s.done ? '#2a9d4a' : s.missed ? red : ink;
     drawChord(x, s.midis, col, s.durs.map(d => durKind(d / pr.tpq)));
   });
   ctx.strokeStyle = red; ctx.lineWidth = 2.5;
@@ -944,6 +947,27 @@ function finishPractice() {
   if (pr.wait) $('res').innerHTML = 'Notes justes : <b>' + pr.hits + '/' + tot + '</b> · fausses notes : <b>' + pr.wrong + '</b><br>(mode attente : pas de statistique de rythme)';
 }
 
+/* --- Mise en avant de la touche à jouer (clavier à l'écran, et boutons Do..Si en dictée) ---
+   Dictée : la touche de la note affichée (si son octave est sur le clavier, sinon toutes les touches de ce nom).
+   Entraînement : les touches de la prochaine note / du prochain accord. */
+let hlSig = '';
+function updateKeyHighlight() {
+  let targets = [], dl = '';
+  if ($('hilite').checked && document.body.dataset.screen === 'app') {
+    if (mode === 'dictee' && notes.length) { dl = notes[0].letter; targets = [indexToMidi(notes[0].idx)]; }
+    else if (mode === 'practice' && pr && !pr.over) {
+      const st = pr.steps.find(t => !t.done && !t.missed);
+      if (st) targets = st.midis.filter(m => !st.got.includes(m));
+    }
+  }
+  const sig = dl + targets.join(',') + '|' + kbGen;
+  if (sig === hlSig) return; hlSig = sig;                 // rien à refaire si rien n'a changé
+  const exact = dl && kbKeys.some(k => !k.black && k.midi === targets[0]);
+  kbKeys.forEach(k => k.el.classList.toggle('hl',
+    dl ? (exact ? k.midi === targets[0] : !k.black && k.midi % 12 === targets[0] % 12) : targets.includes(k.midi)));
+  document.querySelectorAll('#pad button').forEach(b => b.classList.toggle('hl', !!dl && b.dataset.l === dl));
+}
+
 /* ---------- Canvas HiDPI + boucle ---------- */
 function resize() {
   const dpr = window.devicePixelRatio || 1;
@@ -959,7 +983,7 @@ function resize() {
 window.addEventListener('resize', resize);
 function frame(t) {
   const dt = Math.min(0.05, (t - last) / 1000); last = t;
-  update(dt); updateRate(); render();
+  update(dt); updateRate(); render(); updateKeyHighlight();
   requestAnimationFrame(frame);
 }
 
