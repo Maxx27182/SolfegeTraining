@@ -622,7 +622,7 @@ try { navigator.permissions.query({ name: 'midi' }).then(p => { if (p.state === 
 
 /* ================= Réglages, métronome, modes ================= */
 const $ = id => document.getElementById(id);
-const APP_VERSION = 'v19';          // à garder identique au numéro de cache dans sw.js
+const APP_VERSION = 'v20';          // à garder identique au numéro de cache dans sw.js
 $('ver').textContent = APP_VERSION;
 
 /* --- Intervalle de la dictée : listes Do2 ... Si5 --- */
@@ -917,6 +917,7 @@ function startPractice() {
 }
 $('start').addEventListener('click', startPractice);
 $('speed').addEventListener('input', e => { $('speedVal').textContent = e.target.value; });
+const CHORD_MS = 150;     // les notes d'un accord doivent être jouées à moins de 150 ms de la première
 function updatePractice(dt) {
   if (!pr || pr.over) return;
   let adv = dt * pr.bpm / 60 * pr.tpq;                     // avancement de l'horloge musicale, en ticks
@@ -925,15 +926,25 @@ function updatePractice(dt) {
     if (s && pr.cur + adv > s.tick) adv = Math.max(0, s.tick - pr.cur);
   }
   pr.cur += adv;
-  if (!pr.wait) pr.steps.forEach(s => { if (!s.done && !s.missed && pr.cur - s.tick > pr.tpq * 0.5) s.missed = true; });   // trop tard : raté
+  if (!pr.wait) pr.steps.forEach(s => { if (!s.done && !s.missed && (pr.cur - s.tick > pr.tpq * 0.5 || (s.tFirst !== undefined && performance.now() - s.tFirst > CHORD_MS))) { s.missed = true; pr.hits -= s.got.length; s.got = []; } });   // trop tard : raté
   if (pr.cur > pr.end + pr.tpq) finishPractice();
 }
-function practiceHit(midi) {
+function practiceHit(midi, now) {
+  now = now || performance.now();
   if (!pr || pr.over) return;
   const w = pr.tpq * 0.5;
   const s = pr.wait ? pr.steps.find(s => !s.done)          // attente : seule la prochaine note compte
     : pr.steps.find(s => !s.done && !s.missed && s.midis.includes(midi) && !s.got.includes(midi) && Math.abs(pr.cur - s.tick) <= w);
   if (!s || !s.midis.includes(midi) || s.got.includes(midi)) { pr.wrong++; return; }   // note absente de la partition à ce moment
+  if (s.midis.length > 1) {                                // accord : les notes doivent être jouées ensemble
+    if (s.tFirst !== undefined && now - s.tFirst > CHORD_MS) {
+      $('res').textContent = 'Les notes d’un accord se jouent en même temps.';
+      pr.wrong++;
+      if (!pr.wait) { s.missed = true; pr.hits -= s.got.length; s.got = []; return; }           // normal : accord raté
+      pr.hits -= s.got.length; s.got = []; s.tFirst = undefined;   // attente : on recommence l'accord
+    }
+    if (s.tFirst === undefined) s.tFirst = now;           // première note de l'accord : le chrono de 150 ms démarre
+  }
   s.got.push(midi); pr.hits++; pr.deltas.push((pr.cur - s.tick) * 60000 / (pr.bpm * pr.tpq));
   if (s.got.length === s.midis.length) s.done = true;
 }
