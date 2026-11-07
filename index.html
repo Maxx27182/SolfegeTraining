@@ -188,7 +188,8 @@
   <div class="row">Thème <select id="theme"><option value="light">Mode clair</option><option value="dark">Mode sombre</option></select></div>
   <div class="row"><label><input type="checkbox" id="hilite"> Mettre en avant la touche à jouer sur le piano (bleue ; touches noires en rouge)</label></div>
   <div class="row"><label><input type="checkbox" id="hideNames"> Masquer les notes sur le piano</label></div>
-  <div class="row"><label><input type="checkbox" id="showDur" checked> Afficher les durées (ronde, blanche, noire, croche)</label></div>
+  <div class="row"><label><input type="checkbox" id="showDur" checked> Afficher les durées (rondes à doubles croches, notes pointées, barres)</label></div>
+  <div class="row">Armure <select id="keySig"><option value="auto">Auto (celle du fichier)</option><option value="0">Aucune (Do majeur)</option><option value="1">1 dièse</option><option value="2">2 dièses</option><option value="3">3 dièses</option><option value="4">4 dièses</option><option value="5">5 dièses</option><option value="6">6 dièses</option><option value="7">7 dièses</option><option value="-1">1 bémol</option><option value="-2">2 bémols</option><option value="-3">3 bémols</option><option value="-4">4 bémols</option><option value="-5">5 bémols</option><option value="-6">6 bémols</option><option value="-7">7 bémols</option></select></div>
   <div class="row"><label><input type="checkbox" id="sound" checked> Son des notes</label></div>
   <div class="row"><label><input type="checkbox" id="realPiano" checked> Sons de piano réalistes (téléchargés une fois, ~5 Mo)</label></div>
   <div class="row"><label><input type="checkbox" id="strictOct" checked> Octave exacte</label></div>
@@ -622,7 +623,7 @@ try { navigator.permissions.query({ name: 'midi' }).then(p => { if (p.state === 
 
 /* ================= Réglages, métronome, modes ================= */
 const $ = id => document.getElementById(id);
-const APP_VERSION = 'v20';          // à garder identique au numéro de cache dans sw.js
+const APP_VERSION = 'v21';          // à garder identique au numéro de cache dans sw.js
 $('ver').textContent = APP_VERSION;
 
 /* --- Intervalle de la dictée : listes Do2 ... Si5 --- */
@@ -639,7 +640,7 @@ function rangeChanged(e) {
 $('rangeLo').addEventListener('change', rangeChanged); $('rangeHi').addEventListener('change', rangeChanged);
 const PCS = [0, 2, 4, 5, 7, 9, 11];
 let mode = 'dictee';
-const SETTINGS = ['metOn', 'bpm', 'metVol', 'metSound', 'theme', 'sound', 'strictOct', 'octs', 'hideNames', 'showDur', 'realPiano', 'rangeLo', 'rangeHi', 'hilite'];
+const SETTINGS = ['metOn', 'bpm', 'metVol', 'metSound', 'theme', 'sound', 'strictOct', 'octs', 'hideNames', 'showDur', 'keySig', 'realPiano', 'rangeLo', 'rangeHi', 'hilite'];
 
 /* --- Réglages sauvegardés dans localStorage --- */
 function saveSettings() {
@@ -717,51 +718,120 @@ function noteOff(midi) {
   const n = openN[midi]; if (n) { n.d = Math.max(60, performance.now() - t0rec - n.t); delete openN[midi]; }
 }
 
-/* Numéro MIDI -> degré diatonique de la note naturelle + dièse éventuel */
+/* Armure : sf = nombre d'altérations (+ dièses, - bémols). Lettres C=0 ... B=6 dans l'ordre d'apparition. */
+const SHARP_ORD = [3, 0, 4, 1, 5, 2, 6], FLAT_ORD = [6, 2, 5, 1, 4, 0, 3], NAT_PC = [0, 2, 4, 5, 7, 9, 11];
+const ACC = { sharp: '\u266F', flat: '\u266D', nat: '\u266E' };
+let curKey = 0;
+function effKey() { const v = $('keySig').value; return v === 'auto' ? (mode === 'practice' && song ? song.key : 0) : +v; }
+function keyAlt(sf) { const a = [0, 0, 0, 0, 0, 0, 0]; for (let i = 0; i < Math.abs(sf); i++) a[(sf > 0 ? SHARP_ORD : FLAT_ORD)[i]] = sf > 0 ? 1 : -1; return a; }
+/* Numéro MIDI -> { idx: degré diatonique, acc: 'sharp' | 'flat' | 'nat' | null } selon l'armure courante.
+   Note de la gamme : pas d'altération ; hors gamme : dièse (armure en dièses) ou bémol (armure en bémols) ;
+   note naturelle alors que l'armure l'altère : bécarre. */
 function midiToPos(m) {
-  const pc = m % 12, o = Math.floor(m / 12) - 1;
-  return { idx: o * 7 + [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6][pc], sharp: [1, 3, 6, 8, 10].includes(pc) };
+  const alt = keyAlt(curKey), pc = m % 12, mk = (base, L, acc) => ({ idx: (Math.floor(base / 12) - 1) * 7 + L, acc });
+  for (let L = 0; L < 7; L++) if ((NAT_PC[L] + alt[L] + 12) % 12 === pc) return mk(m - alt[L], L, null);
+  let L = NAT_PC.indexOf(pc); if (L >= 0) return mk(m, L, 'nat');
+  if (curKey >= 0) return mk(m - 1, NAT_PC.indexOf(pc - 1), 'sharp');
+  return mk(m + 1, NAT_PC.indexOf(pc + 1), 'flat');
 }
+/* Dessin de l'armure, juste après les clés (signes aux positions standard, sol et fa) */
+const KS_T = { sharp: ['F5','C5','G5','D5','A4','E5','B4'], flat: ['B4','E5','A4','D5','G4','C5','F4'] };
+const KS_B = { sharp: ['F3','C3','G3','D3','A2','E3','B2'], flat: ['B2','E3','A2','D3','G2','C3','F2'] };
+const KS_X0 = 82;
+const keyStep = () => 1.55 * H;
+function keyLimit(sf) { return Math.max(90, Math.min(KS_X0 + Math.abs(sf) * keyStep() + 6, READ_X - 4)); }   // les notes ne passent pas sur l'armure
+function drawKeySig(sf) {
+  if (!sf) return;
+  const k = sf > 0 ? 'sharp' : 'flat';
+  ctx.font = (3.4 * H) + 'px serif';
+  [KS_T, KS_B].forEach(tab => tab[k].slice(0, Math.abs(sf)).forEach((n, i) => ctx.fillText(ACC[k], KS_X0 + i * keyStep(), yOf(n) + 1.1 * H)));
+}
+
 /* Accord : plusieurs notes simultanées (une ou deux portées). `kinds` = une forme pour toutes les notes
    ou un tableau (une forme par note). Si les durées diffèrent, l'accord est coupé en deux voix :
    les notes les plus longues d'un côté, les autres de l'autre, avec des hampes opposées. */
 const KIND_ORDER = { w: 4, h: 3, q: 2, e: 1, s: 0 };
+const KO = k => KIND_ORDER[k[0]] * 2 + (k.length > 1 ? 1 : 0);          // une forme avec « . » (ex. 'q.') = note pointée
 function drawChord(x, midis, col, kinds) {
   const ks = Array.isArray(kinds) ? kinds : midis.map(() => kinds);
-  const top = Math.max(...ks.map(k => KIND_ORDER[k]));
+  const top = Math.max(...ks.map(k => KO(k)));
   const L = [], S = [];
-  midis.forEach((m, i) => (KIND_ORDER[ks[i]] === top ? L : S).push(i));
+  midis.forEach((m, i) => (KO(ks[i]) === top ? L : S).push(i));
   if (!S.length) { drawVoice(x, midis, col, ks[0]); return; }          // toutes les notes ont la même durée
-  const Sk = ks[S.reduce((a, i) => KIND_ORDER[ks[i]] > KIND_ORDER[ks[a]] ? i : a, S[0])];
+  const Sk = ks[S.reduce((a, i) => KO(ks[i]) > KO(ks[a]) ? i : a, S[0])];
   const idxOf = i => midiToPos(midis[i]).idx, mean = a => a.reduce((t, i) => t + idxOf(i), 0) / a.length;
   const lUp = mean(L) >= mean(S);                                       // la voix la plus aiguë a la hampe vers le haut
   const close = S.some(i => L.some(j => Math.abs(idxOf(i) - idxOf(j)) <= 1));   // secondes entre les deux voix : décalage
   drawVoice(x, L.map(i => midis[i]), col, ks[L[0]], lUp ? 'up' : 'down');
   drawVoice(x + (close ? 2.7 * H - 2 : 0), S.map(i => midis[i]), col, Sk, lUp ? 'down' : 'up');
 }
-/* Une voix : têtes de notes, secondes décalées, une seule hampe commune. dir = 'up' | 'down' (sinon automatique) */
-function drawVoice(x, midis, col, kind, dir) {
+/* Une voix : têtes, altérations, points, une seule hampe commune. dir = 'up' | 'down' (sinon automatique).
+   beam = true : ni hampe ni crochet (dessinés par drawBeamed) ; renvoie alors le pied de la hampe. */
+function drawVoice(x, midis, col, kind, dir, beam) {
+  const kb = kind[0], dot = kind.length > 1;
   const ps = midis.map(m => Object.assign({ m }, midiToPos(m))).sort((a, b) => a.idx - b.idx);
   const rx = 1.35 * H, mean = ps.reduce((a, q) => a + q.idx, 0) / ps.length;
   const down = dir ? dir === 'down' : mean >= (mean >= IDX_C4 ? TREBLE_MID : BASS_MID);
-  let prev = null, shifted = false, nSharp = 0;
+  let prev = null, shifted = false, nAcc = 0;
   const cOf = typeof col === 'function' ? col : () => col;   // couleur fixe, ou fonction midi -> couleur
   ps.forEach(q => {
     shifted = !!prev && q.idx - prev.idx <= 1 && !shifted;
     const dx = shifted ? (down ? -2 * rx + 2 : 2 * rx - 2) : 0;
-    setInk(cOf(q.m)); drawNote(x + dx, q.idx, kind, true);                     // têtes seulement
-    if (q.sharp) {                                           // dièses décalés pour ne pas se chevaucher
+    setInk(cOf(q.m)); drawNote(x + dx, q.idx, kb, true);                       // têtes seulement
+    if (q.acc) {                                             // altérations décalées pour ne pas se chevaucher
       ctx.font = (3.4 * H) + 'px serif';
-      ctx.fillText('\u266F', x + Math.min(dx, 0) - 4.2 * H - (nSharp++ % 2) * 2.2 * H, noteToY(q.idx) + 1.1 * H);
+      ctx.fillText(ACC[q.acc], x + Math.min(dx, 0) - 4.2 * H - (nAcc++ % 2) * 2.2 * H, noteToY(q.idx) + 1.1 * H);
+    }
+    if (dot) {                                               // point : dans l'interligne (au-dessus si la note est sur une ligne)
+      ctx.beginPath(); ctx.arc(x + Math.max(dx, 0) + 2.2 * H, noteToY(q.idx % 2 === 0 ? q.idx + 1 : q.idx), 0.3 * H, 0, 7); ctx.fill();
     }
     prev = q;
   });
-  if (kind === 'w') return;                                  // pas de hampe pour la ronde
+  if (kb === 'w') return null;                               // pas de hampe pour la ronde
   setInk(cOf(ps[0].m));
   const lo = noteToY(ps[0].idx), hi = noteToY(ps[ps.length - 1].idx);   // lo = note la plus grave (y grand)
   const sx = down ? x - rx + 1 : x + rx - 1, ys = down ? hi : lo, ye = down ? lo + 7 * H : hi - 7 * H;
+  if (beam) return { sx, ys, col: cOf(ps[0].m) };
   ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(sx, ys); ctx.lineTo(sx, ye); ctx.stroke();
-  if (kind === 'e' || kind === 's') drawFlags(sx, ye, down, kind === 's' ? 2 : 1);
+  if (kb === 'e' || kb === 's') drawFlags(sx, ye, down, kb === 's' ? 2 : 1);
+  return null;
+}
+
+/* Barres de croches : colonnes consécutives, même durée interne (croches / doubles croches), dans un même temps */
+const beamable = it => it.ks.every(k => k === it.ks[0]) && (it.ks[0][0] === 'e' || it.ks[0][0] === 's');
+function drawBeamed(g) {
+  const idxs = g.flatMap(it => it.midis.map(m => midiToPos(m).idx));
+  const mean = idxs.reduce((a, b) => a + b, 0) / idxs.length;
+  const down = mean >= (mean >= IDX_C4 ? TREBLE_MID : BASS_MID), d = down ? 1 : -1;   // une seule direction pour tout le groupe
+  const st = g.map(it => Object.assign({ it }, drawVoice(it.x, it.midis, it.col, it.ks[0], down ? 'down' : 'up', true)));
+  const x0 = st[0].sx, xN = st[st.length - 1].sx, L = 6.5 * H, t = 0.55 * H;
+  let sl = (st[st.length - 1].ys - st[0].ys) / ((xN - x0) || 1); sl = Math.max(-0.3, Math.min(0.3, sl * 0.5));   // pente douce
+  const a = d > 0 ? Math.max(...st.map(q => q.ys + L - sl * (q.sx - x0))) : Math.min(...st.map(q => q.ys - L - sl * (q.sx - x0)));
+  const yAt = x => a + sl * (x - x0);
+  st.forEach(q => { setInk(q.col); ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(q.sx, q.ys); ctx.lineTo(q.sx, yAt(q.sx)); ctx.stroke(); });
+  const bar = (xa, xb, off) => {
+    setInk(st[0].col); ctx.beginPath();
+    ctx.moveTo(xa, yAt(xa) + off); ctx.lineTo(xb, yAt(xb) + off); ctx.lineTo(xb, yAt(xb) + off - d * t); ctx.lineTo(xa, yAt(xa) + off - d * t);
+    ctx.closePath(); ctx.fill();
+  };
+  bar(x0 - 0.8, xN + 0.8, 0);                                          // 1re barre
+  const isS = q => q && q.it.ks[0][0] === 's';
+  st.forEach((q, i) => {                                               // 2e barre pour les doubles croches
+    if (!isS(q)) return;
+    const n = st[i + 1], p = st[i - 1], off = -d * 1.0 * H;
+    if (isS(n)) bar(q.sx, n.sx, off);
+    else if (!isS(p)) { if (n) bar(q.sx, q.sx + 1.8 * H, off); else bar(q.sx - 1.8 * H, q.sx, off); }
+  });
+}
+/* Dessine une suite de colonnes {x, midis, col, ks} : groupe les croches voisines (together(a, b)), saute celles hors de [xmin, xmax] */
+function drawColumns(items, together, xmin, xmax) {
+  for (let i = 0, j; i < items.length; i = j + 1) {
+    j = i;
+    if (beamable(items[i])) while (j + 1 < items.length && j - i < 3 && beamable(items[j + 1]) && together(items[j], items[j + 1])) j++;
+    const g = items.slice(i, j + 1);
+    if (g[0].x < xmin || g[g.length - 1].x > xmax) continue;
+    if (j > i) drawBeamed(g); else drawChord(g[0].x, g[0].midis, g[0].col, g[0].ks);
+  }
 }
 
 /* Crochets de hampe : 1 pour la croche, 2 pour la double croche */
@@ -776,14 +846,14 @@ function drawFlags(sx, ye, down, n) {
   }
 }
 
-/* Durée en temps -> forme de la note (ronde 4, blanche 2, noire 1, croche 0,5) */
+/* Durée en temps -> forme de la note : la plus proche (échelle logarithmique) parmi
+   ronde 4, blanche pointée 3, blanche 2, noire pointée 1,5, noire 1, croche pointée 0,75, croche 0,5, double croche 0,25 */
+const DUR_TAB = [['w', 4], ['h.', 3], ['h', 2], ['q.', 1.5], ['q', 1], ['e.', 0.75], ['e', 0.5], ['s', 0.25]];
 function durKind(beats) {
   if (!$('showDur').checked) return 'q';
-  return beats >= 3 ? 'w' : beats >= 1.5 ? 'h' : beats >= 0.75 ? 'q' : beats >= 0.375 ? 'e' : 's';
-}
-function drawMidiNote(x, midi, col, kind) {
-  const p = midiToPos(midi); setInk(col); drawNote(x, p.idx, kind);
-  if (p.sharp) { ctx.font = (3.4 * H) + 'px serif'; ctx.fillText('\u266F', x - 4.2 * H, noteToY(p.idx) + 1.1 * H); }
+  let best = DUR_TAB[0][0], bd = 1e9;
+  DUR_TAB.forEach(c => { const dd = Math.abs(Math.log(Math.max(beats, 0.05) / c[1])); if (dd < bd) { bd = dd; best = c[0]; } });
+  return best;
 }
 
 /* Instant musical (ticks) -> position horizontale (unités de H), en suivant la disposition aérée des notes */
@@ -801,14 +871,15 @@ function renderSong(ink, red) {
     // Notes jouées à moins de 100 ms d'écart = même accord (même colonne)
     const groups = [];
     recNotes.forEach(n => { const g = groups[groups.length - 1]; if (g && n.t - g.t <= 100) g.notes.push(n); else groups.push({ t: n.t, notes: [n] }); });
-    groups.forEach((g, i) => {
-      const x = W - 40 - (groups.length - 1 - i) * Math.round(10.8 * H); if (x <= 100) return;
-      const dur = n => openN[n.midi] === n ? performance.now() - t0rec - n.t : n.d;   // note tenue : durée en cours
-      drawChord(x, g.notes.map(n => n.midi), ink, g.notes.map(n => durKind(dur(n) * $('bpm').value / 60000)));
-    });
+    curKey = effKey(); setInk(ink); drawKeySig(curKey);
+    const bpmR = +$('bpm').value, dur = n => openN[n.midi] === n ? performance.now() - t0rec - n.t : n.d;   // note tenue : durée en cours
+    const items = groups.map((g, i) => ({ x: W - 40 - (groups.length - 1 - i) * Math.round(10.8 * H), t: g.t, midis: g.notes.map(n => n.midi), col: ink,
+      ks: g.notes.map(n => durKind(dur(n) * bpmR / 60000)) }));
+    drawColumns(items, (a, b) => (b.t - a.t) * bpmR / 60000 <= 0.8, Math.max(100.01, keyLimit(curKey)), W + 20);
     return;
   }
   if (!pr) return;
+  curKey = effKey(); setInk(ink); drawKeySig(curKey);
   const u0 = tickToU(pr.cur), px = tk => READ_X + (tickToU(tk) - u0) * H;   // position écran d'un instant musical
   const yT = noteToY(TREBLE_LINES[4]), yB = noteToY(BASS_LINES[0]);
   setInk(ink); ctx.lineWidth = 1; ctx.font = '11px system-ui';
@@ -816,11 +887,12 @@ function renderSong(ink, red) {
     const x = px((m - 1) * pr.tpm);
     if (x > 90 && x < W) { ctx.beginPath(); ctx.moveTo(x, yT); ctx.lineTo(x, yB); ctx.stroke(); ctx.fillText(m, x + 3, yT - 6); }
   }
+  const items = [];                                       // colonnes proches de l'écran (marge pour ne pas couper une barre)
   pr.steps.forEach(s => {
-    const x = px(s.tick); if (x < 90 || x > W + 20) return;
-    const col = s.done ? '#2a9d4a' : s.missed ? red : ink;
-    drawChord(x, s.midis, col, s.durs.map(d => durKind(d / pr.tpq)));
+    const x = px(s.tick); if (x < -100 || x > W + 100) return;
+    items.push({ x, tick: s.tick, midis: s.midis, col: s.done ? '#2a9d4a' : s.missed ? red : ink, ks: s.durs.map(d => durKind(d / pr.tpq)) });
   });
+  drawColumns(items, (a, b) => Math.floor(a.tick / pr.tpq) === Math.floor(b.tick / pr.tpq) && b.tick - a.tick <= pr.tpq * 0.5 + 1, keyLimit(curKey), W + 20);
   ctx.strokeStyle = red; ctx.lineWidth = 2.5;
   ctx.beginPath(); ctx.moveTo(READ_X, noteToY(MAX_IDX + 3)); ctx.lineTo(READ_X, noteToY(MIN_IDX - 2)); ctx.stroke();
 }
@@ -849,7 +921,7 @@ function parseMidi(buf) {
   const d = new DataView(buf); let p = 0;
   const u32 = () => { const v = d.getUint32(p); p += 4; return v; }, u16 = () => { const v = d.getUint16(p); p += 2; return v; };
   if (u32() !== 0x4D546864) throw 0;
-  u32(); u16(); const nt = u16(), tpq = u16(), ons = [], open = {}; let bpm = 0, num = 4, den = 4;
+  u32(); u16(); const nt = u16(), tpq = u16(), ons = [], open = {}; let bpm = 0, num = 4, den = 4, key = 0, keySet = false;
   for (let t = 0; t < nt; t++) {
     if (u32() !== 0x4D54726B) throw 0;
     const len = u32(), end = p + len; let tick = 0, run = 0;   // (len lu avant de calculer la fin)
@@ -860,6 +932,7 @@ function parseMidi(buf) {
         const ty = d.getUint8(p + 1); let q = p + 2, l = 0, c; do { c = d.getUint8(q++); l = (l << 7) | (c & 127); } while (c & 128);
         if (ty === 0x51 && !bpm) bpm = 60000000 / ((d.getUint8(q) << 16) | (d.getUint8(q + 1) << 8) | d.getUint8(q + 2));
         if (ty === 0x58 && tick === 0) { num = d.getUint8(q); den = 1 << d.getUint8(q + 1); }
+        if (ty === 0x59 && l >= 1 && !keySet) { key = d.getInt8(q); keySet = true; }   // armure : -7..+7
         p = q + l; continue;
       }
       if (s === 0xF0 || s === 0xF7) { p++; let l = 0, c; do { c = d.getUint8(p++); l = (l << 7) | (c & 127); } while (c & 128); p += l; continue; }
@@ -886,7 +959,7 @@ function parseMidi(buf) {
     else steps.push({ tick: o.tick, midis: [o.midi], durs: [o.val] });
   });
   const tpm = tpq * 4 * num / den;
-  return { steps, tpq, tpm, bpm: bpm || 100, measures: Math.floor(steps[steps.length - 1].tick / tpm) + 1 };
+  return { steps, tpq, tpm, bpm: bpm || 100, key, measures: Math.floor(steps[steps.length - 1].tick / tpm) + 1 };
 }
 $('file').addEventListener('change', async e => {
   const f = e.target.files[0]; if (!f) return;
@@ -894,7 +967,7 @@ $('file').addEventListener('change', async e => {
     song = parseMidi(await f.arrayBuffer());
     $('m1').value = 1; $('m2').value = song.measures;
     $('bpm').value = Math.min(200, Math.max(40, Math.round(song.bpm))); saveSettings(); applySettings();
-    $('res').textContent = f.name + ' : ' + song.measures + ' mesures, tempo ' + Math.round(song.bpm) + '. Choisissez la plage puis Démarrer.';
+    $('res').textContent = f.name + ' : ' + song.measures + ' mesures, tempo ' + Math.round(song.bpm) + (song.key ? ', armure ' + Math.abs(song.key) + (song.key > 0 ? ' dièse(s)' : ' bémol(s)') : '') + '. Choisissez la plage puis Démarrer.';
   } catch (err) { song = null; $('res').textContent = 'Fichier MIDI illisible.'; }
 });
 
