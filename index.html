@@ -60,8 +60,10 @@
   #ver { font:.75rem system-ui,sans-serif; color:var(--muted); }
   .range { margin-bottom:10px; font:.9rem system-ui,sans-serif; color:var(--muted); }
   .range select { padding:6px; font:.9rem system-ui,sans-serif; color:var(--ink); background:var(--btn); border:1px solid var(--line); border-radius:6px; }
-  body[data-screen="home"] main > :not(header):not(#home) { display:none !important; }
-  body[data-screen="home"] #back, body:not([data-screen="home"]) #home { display:none; }
+  body:not([data-screen="app"]) main > :not(header):not(.menu) { display:none !important; }
+  body[data-screen="home"] #back, .menu { display:none; }
+  body[data-screen="home"] #home, body[data-screen="learn"] #learn, body[data-screen="school"] #school { display:block; }
+  #school h2 { font:600 1rem system-ui,sans-serif; margin:18px 0 8px; } .tile.done b::after { content:" ✓"; color:#2a9d4a; }
   #home .lead { font:1rem system-ui,sans-serif; color:var(--muted); margin:0 0 12px; }
   .tiles { display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:14px; }
   .tile { display:flex; flex-direction:column; gap:6px; text-align:left; padding:12px; font:inherit; color:var(--ink);
@@ -77,7 +79,7 @@
   header { flex-wrap:wrap; }
   header .range, header .midi { flex:0 0 100%; margin:0 0 8px; }
   header .midi { order:6; } header .range { order:7; }
-  body[data-screen="home"] header .range, body[data-screen="home"] header .midi { display:none; }
+  body:not([data-screen="app"]) header .range, body:not([data-screen="app"]) header .midi { display:none; }
   @media (orientation: landscape) {
     /* Une seule ligne : Accueil | intervalle (au centre) | MIDI | version | réglages */
     header { flex-wrap:nowrap; gap:8px; margin:0 0 6px; }
@@ -85,7 +87,7 @@
     header .range { order:2; flex:0 0 auto; margin:0 auto; white-space:nowrap; }
     header .midi { order:3; flex:0 0 auto; margin:0; flex-wrap:nowrap; gap:6px; }
     header #ver { order:4; } header #gear { order:5; }
-    body[data-screen="home"] header #ver { margin-left:auto; }
+    body:not([data-screen="app"]) header #ver { margin-left:auto; }
     body:not([data-mode="dictee"]) header .midi { margin-left:auto; }
     header .midi button, header .range select { font-size:.8rem; padding:3px 8px; }
     #midiStatus { max-width:26vw; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:.8rem; }
@@ -135,14 +137,14 @@
     <div class="range dict-only">Notes de <select id="rangeLo" aria-label="Première note"></select> à <select id="rangeHi" aria-label="Dernière note"></select></div>
     <div class="midi"><button id="midiBtn" type="button">Connecter le piano (MIDI)</button><span id="midiStatus">Aucun piano connecté</span></div>
     <button id="gear" type="button" aria-label="Paramètres">⚙︎</button></header>
-  <section id="home">
+  <section id="home" class="menu">
     <p class="lead">Que voulez-vous travailler aujourd’hui ?</p>
     <div class="tiles">
-      <button class="tile" type="button" data-m="dictee">
+      <button class="tile" type="button" data-go="learn">
         <svg viewBox="0 0 200 90" aria-hidden="true"><path class="s" d="M10 25H190M10 35H190M10 45H190M10 55H190M10 65H190"/>
           <g class="f"><ellipse cx="50" cy="50" rx="7" ry="5" transform="rotate(-20 50 50)"/><ellipse cx="85" cy="35" rx="7" ry="5" transform="rotate(-20 85 35)"/><ellipse cx="120" cy="60" rx="7" ry="5" transform="rotate(-20 120 60)"/></g>
           <path class="s" d="M56 49V20M79 36V63M126 59V30"/><path class="r" d="M150 12V78"/></svg>
-        <b>Dictée de note</b><span>Reconnaissez les notes qui défilent sur la double portée.</span></button>
+        <b>Apprendre à jouer</b><span>Lecture de notes, puis école de piano : des exercices guidés pour débuter.</span></button>
       <button class="tile" type="button" data-m="record">
         <svg viewBox="0 0 200 90" aria-hidden="true">
           <g class="w"><rect x="23" y="26" width="22" height="56"/><rect x="45" y="26" width="22" height="56"/><rect x="67" y="26" width="22" height="56"/><rect x="89" y="26" width="22" height="56"/><rect x="111" y="26" width="22" height="56"/><rect x="133" y="26" width="22" height="56"/><rect x="155" y="26" width="22" height="56"/></g>
@@ -157,6 +159,10 @@
         <b>S’entraîner sur un morceau</b><span>Importez un fichier .mid et suivez la partition au piano, mesure par mesure.</span></button>
     </div>
   </section>
+  <section id="learn" class="menu"><p class="lead">Apprendre à jouer</p><div class="tiles">
+    <button class="tile" type="button" data-m="dictee" data-back="learn"><b>Lecture de notes</b><span>Reconnaissez les notes qui défilent sur la double portée.</span></button>
+    <button class="tile" type="button" data-go="school"><b>École de piano</b><span>Un parcours pas à pas : main droite, main gauche, rythmes, deux mains, armures.</span></button></div></section>
+  <section id="school" class="menu"><p class="lead">École de piano : faites les exercices dans l’ordre (✓ = 80 % de notes justes).</p><div id="lessons"></div></section>
   <div class="stats dict-only">
     <span>Réponses : <b id="sRatio">0/0</b></span>
     
@@ -623,7 +629,7 @@ try { navigator.permissions.query({ name: 'midi' }).then(p => { if (p.state === 
 
 /* ================= Réglages, métronome, modes ================= */
 const $ = id => document.getElementById(id);
-const APP_VERSION = 'v21';          // à garder identique au numéro de cache dans sw.js
+const APP_VERSION = 'v22';          // à garder identique au numéro de cache dans sw.js
 $('ver').textContent = APP_VERSION;
 
 /* --- Intervalle de la dictée : listes Do2 ... Si5 --- */
@@ -697,13 +703,103 @@ function click(t, accent) {            // premier temps de mesure : plus aigu
 let recNotes = [], openN = {}, t0rec = 0, pr = null, song = null;
 function setMode(m) {
   mode = m; document.body.dataset.mode = m;
-  recNotes = []; openN = {}; pr = null; $('res').textContent = '';
+  recNotes = []; openN = {}; pr = null; curLesson = null; $('res').textContent = '';
   if (m === 'dictee') restart();
   buildKeyboard();
 }
-function openMode(m) { setMode(m); document.body.dataset.screen = 'app'; resize(); window.scrollTo(0, 0); }
-document.querySelectorAll('.tile').forEach(t => t.addEventListener('click', () => openMode(t.dataset.m)));
-$('back').addEventListener('click', () => { document.body.dataset.screen = 'home'; });
+let backTo = 'home', curLesson = null;
+const BACK = { learn: 'home', school: 'learn' };
+function goScreen(sc) {
+  document.body.dataset.screen = sc;
+  const to = sc === 'app' ? backTo : BACK[sc];
+  $('back').textContent = to === 'home' ? '⌂ Accueil' : '← Retour';
+  window.scrollTo(0, 0);
+}
+function openMode(m, from = 'home') { backTo = from; setMode(m); goScreen('app'); resize(); }
+document.querySelectorAll('.tile[data-m],.tile[data-go]').forEach(t => t.addEventListener('click', () =>
+  t.dataset.go ? goScreen(t.dataset.go) : openMode(t.dataset.m, t.dataset.back || 'home')));
+$('back').addEventListener('click', () => { const sc = document.body.dataset.screen; goScreen(sc === 'app' ? backTo : BACK[sc]); });
+
+/* --- École de piano : exercices écrits en notation compacte, convertis en fichier MIDI puis joués par le mode entraînement ---
+   Notation : "C4 D4:2 E4+G4:.5 r:1"  (note + octave, # ou b, '+' = accord, :durée en temps (1 par défaut), r = silence) */
+const LESSONS = [
+ { g: '1 · Main droite seule', items: [
+  ['Do – Ré – Mi', 'Pouce sur Do, trois notes voisines.', 'C4 D4 E4 D4 C4 D4 E4 E4 D4 D4 C4:2'],
+  ['Cinq doigts : Do à Sol', 'Un doigt par note, montée puis descente.', 'C4 D4 E4 F4 G4 F4 E4 D4 C4:4'],
+  ['Sauts de tierce', 'On saute une touche, comme 1-3, 2-4…', 'C4 E4 D4 F4 E4 G4 F4 E4 D4 F4 E4 D4 C4:4'],
+  ['Position de Sol', 'La main se déplace : pouce sur Sol.', 'G4 A4 B4 C5 D5 C5 B4 A4 G4 B4 D5 B4 G4:4']] },
+ { g: '2 · Main gauche seule', items: [
+  ['Do à Sol, main gauche', 'Auriculaire sur Do grave, pouce sur Sol.', null, 'C3 D3 E3 F3 G3 F3 E3 D3 C3:4'],
+  ['Basse en tierces', 'Même idée qu’à droite, mais en bas.', null, 'C3 E3 D3 F3 E3 G3 F3 E3 D3 F3 E3 D3 C3:4'],
+  ['Position de Sol grave', 'Sol2 à Ré3, aller-retour.', null, 'G2 A2 B2 C3 D3 C3 B2 A2 G2:4']] },
+ { g: '3 · Les rythmes', items: [
+  ['Noires et blanches', 'Une blanche dure deux temps.', 'C4 C4 E4:2 D4 D4 F4:2 E4 E4 G4:2 C4:4'],
+  ['Rondes', 'Quatre temps : comptez 1-2-3-4.', 'C4:4 E4:4 G4:4 C5:4'],
+  ['Croches', 'Deux notes par temps : « 1 et 2 et ».', 'C4:.5 D4:.5 E4:.5 F4:.5 G4 E4 C4:.5 D4:.5 E4:.5 F4:.5 G4:2'],
+  ['Noire pointée', 'Longue (1,5 temps) puis courte (croche).', 'C4:1.5 D4:.5 E4:1.5 F4:.5 G4:1.5 F4:.5 E4:1.5 D4:.5 C4:4'],
+  ['Silences', 'Ne jouez rien, mais comptez.', 'C4 r E4 r D4 r F4 r E4 G4 r:2 C4:4'],
+  ['Croches, main gauche', 'Le même rythme en bas.', null, 'C3:.5 D3:.5 E3:.5 F3:.5 G3 F3 E3:.5 D3:.5 C3:.5 D3:.5 C3:2']] },
+ { g: '4 · Les deux mains', items: [
+  ['Notes tenues + mélodie', 'La main gauche tient, la droite chante.', 'E4:4 D4:4 E4:4 C4:4', 'C3:4 G2:4 C3:4 C3:4'],
+  ['Une main après l’autre', 'Les mains jouent à tour de rôle.', 'E4 D4 C4 r E4 D4 C4 r', 'r:3 C3 r:3 G2'],
+  ['Mouvement contraire', 'Les mains s’éloignent puis se rejoignent.', 'C4 D4 E4 F4 G4 F4 E4 D4 C4:4', 'C3 B2 A2 G2 F2 G2 A2 B2 C3:4'],
+  ['Premiers accords', 'Trois notes ensemble à la main gauche.', 'E4 G4 E4 C4 A4 C5 A4 F4 B4 D5 B4 G4 C5:4', 'C3+E3+G3:4 F3+A3+C4:4 G3+B3+D4:4 C3+E3+G3:4']] },
+ { g: '5 · Petits morceaux', items: [
+  ['Ode à la joie', 'Beethoven, main droite.', 'E4 E4 F4 G4 G4 F4 E4 D4 C4 C4 D4 E4 E4:1.5 D4:.5 D4:2'],
+  ['Au clair de la lune', 'Chanson traditionnelle.', 'C4 C4 C4 D4 E4:2 D4:2 C4 E4 D4 D4 C4:4'],
+  ['Frère Jacques', 'Chaque phrase se joue deux fois.', 'C4 D4 E4 C4 C4 D4 E4 C4 E4 F4 G4:2 E4 F4 G4:2'],
+  ['Valse simple (3 temps)', 'Comptez 1-2-3, mains ensemble.', 'G4 E4 E4 F4 D4 D4 C4 D4 E4 F4 G4 G4', 'C3:3 G2:3 C3:3 C3:3', { ts: 3 }]] },
+ { g: '6 · Les armures', items: [
+  ['Gamme de Sol (1 dièse)', 'Le Fa devient Fa dièse.', 'G4 A4 B4 C5 D5 E5 F#5 G5 G5 F#5 E5 D5 C5 B4 A4 G4', null, { key: 1, bpm: 70 }],
+  ['Gamme de Fa (1 bémol)', 'Le Si devient Si bémol.', 'F4 G4 A4 Bb4 C5 D5 E5 F5 F5 E5 D5 C5 Bb4 A4 G4 F4', null, { key: -1, bpm: 70 }]] }];
+const LESSON_LIST = []; LESSONS.forEach(g => g.items.forEach(it => LESSON_LIST.push({ g: g.g, title: it[0], hint: it[1], rh: it[2], lh: it[3], o: it[4] || {} })));
+
+function buildMidi(L) {
+  const T = 480, u32 = n => [n >>> 24, n >> 16 & 255, n >> 8 & 255, n & 255];
+  const vl = n => { const b = [n & 127]; while ((n = Math.floor(n / 128))) b.unshift((n & 127) | 128); return b; };
+  const NAT = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+  const pitch = p => NAT[p[0]] + (p[1] === '#' ? 1 : p[1] === 'b' ? -1 : 0) + (+p.slice(-1) + 1) * 12;
+  const chunk = (id, d) => [...id].map(c => c.charCodeAt(0)).concat(u32(d.length), d);
+  const track = (txt, ch) => {
+    const ev = []; let wait = 0;
+    txt.split(/\s+/).forEach(tok => {
+      const [ps, d] = tok.split(':'), ticks = Math.round((d ? +d : 1) * T);
+      if (ps === 'r') { wait += ticks; return; }
+      const ms = ps.split('+').map(pitch);
+      ms.forEach((m, i) => ev.push(...vl(i ? 0 : wait), 0x90 | ch, m, 80));
+      ms.forEach((m, i) => ev.push(...vl(i ? 0 : ticks), 0x80 | ch, m, 0));
+      wait = 0;
+    });
+    return chunk('MTrk', ev.concat(vl(wait), [0xFF, 0x2F, 0]));
+  };
+  const us = Math.round(6e7 / (L.o.bpm || 60)), ts = L.o.ts || 4;
+  const meta = chunk('MTrk', [0, 0xFF, 0x51, 3, us >> 16 & 255, us >> 8 & 255, us & 255, 0, 0xFF, 0x58, 4, ts, 2, 24, 8, 0, 0xFF, 0x59, 2, (L.o.key || 0) & 255, 0, 0, 0xFF, 0x2F, 0]);
+  const tr = [meta]; if (L.rh) tr.push(track(L.rh, 0)); if (L.lh) tr.push(track(L.lh, 1));
+  return new Uint8Array([].concat(chunk('MThd', [0, 1, 0, tr.length, T >> 8, T & 255]), ...tr)).buffer;
+}
+const schoolSave = () => { try { return JSON.parse(localStorage.getItem('pianoSchool')) || {}; } catch (e) { return {}; } };
+function buildSchool() {
+  const best = schoolSave(); let html = '', g = '';
+  LESSON_LIST.forEach((L, i) => {
+    if (L.g !== g) { html += (g ? '</div>' : '') + '<h2>' + L.g + '</h2><div class="tiles">'; g = L.g; }
+    html += '<button class="tile' + (best[i] >= 80 ? ' done' : '') + '" type="button" data-l="' + i + '"><b>' + L.title + '</b><span>' + L.hint + (best[i] ? ' · meilleur : ' + best[i] + ' %' : '') + '</span></button>';
+  });
+  $('lessons').innerHTML = html + '</div>';
+  $('lessons').querySelectorAll('.tile').forEach(t => t.addEventListener('click', () => openLesson(+t.dataset.l)));
+}
+function openLesson(i) {
+  const L = LESSON_LIST[i];
+  openMode('practice', 'school');
+  song = parseMidi(buildMidi(L)); curLesson = i;
+  $('m1').value = 1; $('m2').value = song.measures; $('bpm').value = L.o.bpm || 60; applySettings();
+  $('res').textContent = L.title + ' : ' + L.hint + ' Appuyez sur Démarrer.';
+}
+function lessonDone(hits, tot) {            // appelée en fin d'entraînement : garde le meilleur score
+  if (curLesson === null || !tot) return;
+  const b = schoolSave(), p = Math.round(100 * hits / tot);
+  if (p > (b[curLesson] || 0)) { b[curLesson] = p; try { localStorage.setItem('pianoSchool', JSON.stringify(b)); } catch (e) {} buildSchool(); }
+}
+buildSchool();
 
 /* Une note jouée (clavier écran ou piano MIDI) en mode enregistrement / entraînement */
 function noteOn(midi, fromMidi) {
@@ -964,7 +1060,7 @@ function parseMidi(buf) {
 $('file').addEventListener('change', async e => {
   const f = e.target.files[0]; if (!f) return;
   try {
-    song = parseMidi(await f.arrayBuffer());
+    song = parseMidi(await f.arrayBuffer()); curLesson = null;
     $('m1').value = 1; $('m2').value = song.measures;
     $('bpm').value = Math.min(200, Math.max(40, Math.round(song.bpm))); saveSettings(); applySettings();
     $('res').textContent = f.name + ' : ' + song.measures + ' mesures, tempo ' + Math.round(song.bpm) + (song.key ? ', armure ' + Math.abs(song.key) + (song.key > 0 ? ' dièse(s)' : ' bémol(s)') : '') + '. Choisissez la plage puis Démarrer.';
@@ -1029,6 +1125,7 @@ function finishPractice() {
     'Écart moyen : <b>' + Math.round(abs) + ' ms</b> (' + (avg > 20 ? 'plutôt en retard' : avg < -20 ? 'plutôt en avance' : 'bien centré') + ')<br>' +
     'Dans le rythme (±100 ms) : <b>' + (n ? Math.round(100 * d.filter(x => Math.abs(x) < 100).length / n) : 0) + ' %</b>';
   if (pr.wait) $('res').innerHTML = 'Notes justes : <b>' + pr.hits + '/' + tot + '</b> · fausses notes : <b>' + pr.wrong + '</b><br>(mode attente : pas de statistique de rythme)';
+  lessonDone(pr.hits, tot);
 }
 
 /* --- Mise en avant de la touche à jouer (clavier à l'écran, et boutons Do..Si en dictée) ---
