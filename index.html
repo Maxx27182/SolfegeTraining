@@ -621,7 +621,7 @@ async function connectMidi() {
     midiAccess = await navigator.requestMIDIAccess();
     midiAccess.onstatechange = refreshMidiInputs;       // branchement / débranchement à chaud
     refreshMidiInputs();
-  } catch (e) { midiStatus('Accès MIDI refusé'); }
+  } catch (e) { midiStatus('Accès MIDI refusé'); alert('USB/MIDI : ' + e.name + ' — ' + e.message); }
 }
 document.getElementById('midiBtn').addEventListener('click', connectMidi);
 
@@ -654,12 +654,22 @@ async function connectBle() {
   }
 }
 document.getElementById('bleBtn').addEventListener('click', connectBle);
+
+/* --- Écran toujours allumé (Wake Lock) : redemandé au retour sur la page et au premier toucher --- */
+let wakeLock = null;
+async function keepAwake() {
+  try { if (navigator.wakeLock && !wakeLock && document.visibilityState === 'visible') {
+    wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => { wakeLock = null; }); } } catch (e) {}
+}
+document.addEventListener('visibilitychange', keepAwake);
+['pointerdown', 'keydown'].forEach(ev => document.addEventListener(ev, keepAwake));
+keepAwake();
 // Reconnexion automatique si la permission a déjà été accordée
 try { navigator.permissions.query({ name: 'midi' }).then(p => { if (p.state === 'granted') connectMidi(); }).catch(() => {}); } catch (e) {}
 
 /* ================= Réglages, métronome, modes ================= */
 const $ = id => document.getElementById(id);
-const APP_VERSION = 'v23';          // à garder identique au numéro de cache dans sw.js
+const APP_VERSION = 'v24';          // à garder identique au numéro de cache dans sw.js
 $('ver').textContent = APP_VERSION;
 
 /* --- Intervalle de la dictée : listes Do2 ... Si5 --- */
