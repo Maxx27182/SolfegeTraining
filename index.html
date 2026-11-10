@@ -102,7 +102,7 @@
   .row input[type=range] { flex:1; }
   /* Visibilité selon le mode */
   body:not([data-mode="dictee"]) .dict-only, body:not([data-mode="dictee"]) #pad { display:none; }
-  body:not([data-mode="record"]) .rec-only, body:not([data-mode="practice"]) .prac-only { display:none; }
+  body:not([data-mode="edit"]) .edit-only, body:not([data-mode="record"]) .rec-only, body:not([data-mode="practice"]) .prac-only { display:none; }
   body:not([data-mode="dictee"]) #kb { display:block; height:auto; }
   .hide-names .wk span, .hide-names .wk small { visibility:hidden; }
   /* Touche à jouer mise en avant : blanche -> bleue, noire -> rouge */
@@ -174,7 +174,14 @@
     <span class="rec-only"><button id="recBtn" type="button">● Enregistrer</button> <button id="clearRec" type="button">Effacer</button>
       Tempo <input id="recBpm" type="number" min="30" max="200" value="80" style="width:4.2em"> Temps <select id="recTs"><option>2</option><option>3</option><option selected>4</option></select>
       Arrondi <select id="quant"><option value="0">aucun</option><option value="1">noire</option><option value="0.5" selected>croche</option><option value="0.25">double croche</option></select>
-      <button id="exp" type="button">Exporter (.mid)</button> <button id="addSchool" type="button">Ajouter à l’école</button></span>
+      <button id="editRec" type="button">Éditer</button> <button id="exp" type="button">Exporter (.mid)</button> <button id="addSchool" type="button">Ajouter à l’école</button></span>
+    <span class="edit-only"><button id="edPrev" type="button">◀</button> <button id="edNext" type="button">▶</button>
+      <button id="edUp" type="button">▲ ½ ton</button> <button id="edDown" type="button">▼ ½ ton</button> <button id="edOctU" type="button">8ve +</button> <button id="edOctD" type="button">8ve −</button>
+      <button id="edLong" type="button">Durée +</button> <button id="edShort" type="button">Durée −</button> <button id="edLeft" type="button">← ¼ temps</button> <button id="edRight" type="button">¼ temps →</button>
+      <button id="edDel" type="button">Supprimer</button> <button id="edUndo" type="button">Annuler</button>
+      Ajout : <select id="edIns"><option value="after">après la note</option><option value="with">dans l’accord</option></select>
+      <select id="edDur"><option value="0.25">double croche</option><option value="0.5">croche</option><option value="0.75">croche pointée</option><option value="1" selected>noire</option><option value="1.5">noire pointée</option><option value="2">blanche</option><option value="3">blanche pointée</option><option value="4">ronde</option></select>
+      <button id="edDone" type="button">Terminer</button></span>
     <span class="prac-only"><label class="btn">Importer .mid<input type="file" id="file" accept=".mid,.midi" hidden></label>
       Mesures <input id="m1" type="number" min="1" value="1"> à <input id="m2" type="number" min="1" value="1">
       <label>Vitesse <input type="range" id="speed" min="20" max="100" step="5" value="100"> <output id="speedVal">100</output> %</label>
@@ -672,7 +679,7 @@ try { navigator.permissions.query({ name: 'midi' }).then(p => { if (p.state === 
 
 /* ================= Réglages, métronome, modes ================= */
 const $ = id => document.getElementById(id);
-const APP_VERSION = 'v25';          // à garder identique au numéro de cache dans sw.js
+const APP_VERSION = 'v26';          // à garder identique au numéro de cache dans sw.js
 $('ver').textContent = APP_VERSION;
 
 /* --- Intervalle de la dictée : listes Do2 ... Si5 --- */
@@ -848,11 +855,12 @@ const b64ToBuf = t => Uint8Array.from(atob(t), c => c.charCodeAt(0)).buffer;
 function buildMine(best) {
   const list = mineLoad();
   $('mine').innerHTML = (list.length ? '<div class="tiles">' + list.map(m => '<div class="mrow"><button class="tile' + (best['m' + m.id] >= 80 ? ' done' : '') + '" type="button" data-o="' + m.id + '"><b></b><span>Joué par vous' +
-    (best['m' + m.id] ? ' · meilleur : ' + best['m' + m.id] + ' %' : '') + '</span></button><button class="del" type="button" data-d="' + m.id + '">Supprimer</button></div>').join('') + '</div>'
+    (best['m' + m.id] ? ' · meilleur : ' + best['m' + m.id] + ' %' : '') + '</span></button><button class="del" type="button" data-e="' + m.id + '">Éditer</button><button class="del" type="button" data-d="' + m.id + '">Supprimer</button></div>').join('') + '</div>'
     : '<p>Aucun morceau pour l’instant : dans « S’enregistrer », jouez puis appuyez sur « Ajouter à l’école ».</p>') +
     '<p><button id="mBackup" type="button">Sauvegarder (.json)</button> <label class="btn">Restaurer<input type="file" id="mRestore" accept=".json" hidden></label></p>';
   $('mine').querySelectorAll('[data-o]').forEach((t, k) => { const m = list.find(x => x.id === t.dataset.o); t.querySelector('b').textContent = m.title;
     t.addEventListener('click', () => openSong('m' + m.id, m.title, 'Votre enregistrement.', b64ToBuf(m.b64), m.bpm)); });
+  $('mine').querySelectorAll('[data-e]').forEach(b => b.addEventListener('click', () => editMine(list.find(x => x.id === b.dataset.e))));
   $('mine').querySelectorAll('[data-d]').forEach(b => b.addEventListener('click', () => {
     const m = list.find(x => x.id === b.dataset.d);
     if (confirm('Supprimer « ' + m.title + ' » ?')) { mineSave(list.filter(x => x !== m)); buildSchool(); } }));
@@ -879,6 +887,7 @@ function noteOn(midi, fromMidi) {
     if (!recNotes.length) t0rec = now;
     const n = { midi, t: now - t0rec, d: 400 }; recNotes.push(n); openN[midi] = n;
   } else if (mode === 'practice') practiceHit(midi, now);
+  else if (mode === 'edit') edInsert(midi);
 }
 function noteOff(midi) {
   const n = openN[midi]; if (n) { n.d = Math.max(60, performance.now() - t0rec - n.t); delete openN[midi]; }
@@ -888,7 +897,7 @@ function noteOff(midi) {
 const SHARP_ORD = [3, 0, 4, 1, 5, 2, 6], FLAT_ORD = [6, 2, 5, 1, 4, 0, 3], NAT_PC = [0, 2, 4, 5, 7, 9, 11];
 const ACC = { sharp: '\u266F', flat: '\u266D', nat: '\u266E' };
 let curKey = 0;
-function effKey() { const v = $('keySig').value; return v === 'auto' ? (mode === 'practice' && song ? song.key : 0) : +v; }
+function effKey() { if (mode === 'edit' && ed) return ed.key; const v = $('keySig').value; return v === 'auto' ? (mode === 'practice' && song ? song.key : 0) : +v; }
 function keyAlt(sf) { const a = [0, 0, 0, 0, 0, 0, 0]; for (let i = 0; i < Math.abs(sf); i++) a[(sf > 0 ? SHARP_ORD : FLAT_ORD)[i]] = sf > 0 ? 1 : -1; return a; }
 /* Numéro MIDI -> { idx: degré diatonique, acc: 'sharp' | 'flat' | 'nat' | null } selon l'armure courante.
    Note de la gamme : pas d'altération ; hors gamme : dièse (armure en dièses) ou bémol (armure en bémols) ;
@@ -1015,8 +1024,8 @@ function drawFlags(sx, ye, down, n) {
 /* Durée en temps -> forme de la note : la plus proche (échelle logarithmique) parmi
    ronde 4, blanche pointée 3, blanche 2, noire pointée 1,5, noire 1, croche pointée 0,75, croche 0,5, double croche 0,25 */
 const DUR_TAB = [['w', 4], ['h.', 3], ['h', 2], ['q.', 1.5], ['q', 1], ['e.', 0.75], ['e', 0.5], ['s', 0.25]];
-function durKind(beats) {
-  if (!$('showDur').checked) return 'q';
+function durKind(beats, force) {
+  if (!force && !$('showDur').checked) return 'q';
   let best = DUR_TAB[0][0], bd = 1e9;
   DUR_TAB.forEach(c => { const dd = Math.abs(Math.log(Math.max(beats, 0.05) / c[1])); if (dd < bd) { bd = dd; best = c[0]; } });
   return best;
@@ -1033,6 +1042,7 @@ function tickToU(tk) {
 }
 
 function renderSong(ink, red) {
+  if (mode === 'edit') { renderEdit(ink); return; }
   if (mode === 'record') {                                // les dernières notes jouées, la plus récente à droite
     // Notes jouées à moins de 100 ms d'écart = même accord (même colonne)
     const groups = [];
@@ -1083,16 +1093,21 @@ function setRec(on) {
   $('res').textContent = on ? 'Enregistrement : jouez, le temps démarre à la première note.'
     : recNotes.length + ' notes enregistrées. Réglez tempo et arrondi, puis exportez ou ajoutez à l’école.';
 }
-function recMidiBytes() {
-  const bpm = recBpmV(), tpq = 480, k = tpq * bpm / 60000, mpq = Math.round(60000000 / bpm), ev = [];
-  qRec().forEach(n => { ev.push([Math.round(n.t * k), 0x90, n.midi, 80]); ev.push([Math.round((n.t + n.d) * k), 0x80, n.midi, 0]); });
+/* Notes {midi, b = début en temps, d = durée en temps} -> fichier MIDI (type 0, 480 ticks/noire) */
+function notesToMidi(ns, bpm, ts, key) {
+  const tpq = 480, mpq = Math.round(60000000 / bpm), ev = [];
+  ns.forEach(n => { ev.push([Math.round(n.b * tpq), 0x90, n.midi, 80]); ev.push([Math.round((n.b + n.d) * tpq), 0x80, n.midi, 0]); });
   ev.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
-  const tr = [0, 0xFF, 0x51, 3, (mpq >> 16) & 255, (mpq >> 8) & 255, mpq & 255, 0, 0xFF, 0x58, 4, +$('recTs').value, 2, 24, 8, 0, 0xFF, 0x59, 2, effKey() & 255, 0]; let last = 0;
+  const tr = [0, 0xFF, 0x51, 3, (mpq >> 16) & 255, (mpq >> 8) & 255, mpq & 255, 0, 0xFF, 0x58, 4, ts, 2, 24, 8, 0, 0xFF, 0x59, 2, key & 255, 0]; let last = 0;
   ev.forEach(e => { tr.push(...vlq(e[0] - last), e[1], e[2], e[3]); last = e[0]; });
   tr.push(0, 0xFF, 0x2F, 0);
   const L = tr.length, hdr = [0x4D, 0x54, 0x68, 0x64, 0, 0, 0, 6, 0, 0, 0, 1, tpq >> 8, tpq & 255];
   const th = [0x4D, 0x54, 0x72, 0x6B, (L >>> 24) & 255, (L >> 16) & 255, (L >> 8) & 255, L & 255];
   return new Uint8Array([...hdr, ...th, ...tr]);
+}
+function recMidiBytes() {
+  const bpm = recBpmV(), k = bpm / 60000;
+  return notesToMidi(qRec().map(n => ({ midi: n.midi, b: n.t * k, d: n.d * k })), bpm, +$('recTs').value, effKey());
 }
 function exportMidi() {
   if (recOn) setRec(false);
@@ -1108,6 +1123,102 @@ function addToSchool() {
   const list = mineLoad(); list.push({ id: Date.now().toString(36), title, bpm: recBpmV(), b64: bytesToB64(recMidiBytes()) });
   mineSave(list); buildSchool();
   $('res').textContent = '« ' + title + ' » ajouté à l’école (section « Mes morceaux »).';
+}
+/* ---------- Éditeur : toucher une note pour la sélectionner, puis la corriger ; le clavier ajoute des notes ---------- */
+const ED_DURS = [0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4], DUR_NAME = { w: 'ronde', h: 'blanche', q: 'noire', e: 'croche', s: 'double croche' };
+let ed = null;       // { notes: [{midi, b, d}], sel, bpm, ts, key, from: 'rec' | 'school', id, undo: [] }
+function edCols() {
+  const cols = [];
+  ed.notes.slice().sort((a, b) => a.b - b.b || a.midi - b.midi).forEach(n => {
+    const c = cols[cols.length - 1]; if (c && Math.abs(n.b - c.b) < 0.01) c.notes.push(n); else cols.push({ b: n.b, notes: [n] });
+  });
+  return cols;
+}
+const edSnap = () => { ed.undo.push(JSON.stringify(ed.notes.map(n => [n.midi, n.b, n.d]))); if (ed.undo.length > 60) ed.undo.shift(); };
+function edMove(dir) {
+  const cols = edCols(), c = cols[cols.findIndex(c => c.notes.includes(ed.sel)) + dir]; if (!c) return;
+  ed.sel = c.notes.reduce((a, n) => Math.abs(n.midi - ed.sel.midi) < Math.abs(a.midi - ed.sel.midi) ? n : a);
+}
+function edInsert(midi) {
+  if (!ed) return;
+  edSnap();
+  const d = +$('edDur').value, sel = ed.sel, withSel = sel && $('edIns').value === 'with', b = !sel ? 0 : withSel ? sel.b : sel.b + sel.d;
+  if (!withSel) ed.notes.forEach(n => { if (n.b >= b - 0.01) n.b += d; });     // insertion : la suite est décalée
+  ed.sel = { midi, b, d }; ed.notes.push(ed.sel);
+}
+function edDelete() {
+  const ns = ed.notes.slice().sort((a, b) => a.b - b.b || a.midi - b.midi), i = ns.indexOf(ed.sel);
+  ed.notes = ed.notes.filter(n => n !== ed.sel); ns.splice(i, 1); ed.sel = ns[Math.min(i, ns.length - 1)] || null;
+}
+function edUndo() {
+  if (!ed.undo.length) return;
+  ed.notes = JSON.parse(ed.undo.pop()).map(a => ({ midi: a[0], b: a[1], d: a[2] })); ed.sel = ed.notes[0] || null;
+}
+function edDo(fn) { return () => { if (ed && ed.sel) { edSnap(); fn(ed.sel); } }; }
+const edNear = d => ED_DURS.reduce((a, v, i) => Math.abs(v - d) < Math.abs(ED_DURS[a] - d) ? i : a, 0);
+[['edUp', n => { n.midi = Math.min(83, n.midi + 1); }], ['edDown', n => { n.midi = Math.max(36, n.midi - 1); }],
+ ['edOctU', n => { n.midi = Math.min(83, n.midi + 12); }], ['edOctD', n => { n.midi = Math.max(36, n.midi - 12); }],
+ ['edLong', n => { n.d = ED_DURS[Math.min(7, edNear(n.d) + 1)]; }], ['edShort', n => { n.d = ED_DURS[Math.max(0, edNear(n.d) - 1)]; }],
+ ['edLeft', n => { n.b = Math.max(0, n.b - 0.25); }], ['edRight', n => { n.b += 0.25; }]
+].forEach(([id, fn]) => $(id).addEventListener('click', edDo(fn)));
+$('edPrev').addEventListener('click', () => { if (ed && ed.sel) edMove(-1); });
+$('edNext').addEventListener('click', () => { if (ed && ed.sel) edMove(1); });
+$('edDel').addEventListener('click', () => { if (ed && ed.sel) { edSnap(); edDelete(); } });
+$('edUndo').addEventListener('click', () => { if (ed) edUndo(); });
+$('edDone').addEventListener('click', edDone);
+$('editRec').addEventListener('click', () => {
+  if (recOn) setRec(false);
+  if (!recNotes.length) { $('res').textContent = 'Rien à éditer : enregistrez d’abord un morceau.'; return; }
+  const bpm = recBpmV(), k = bpm / 60000, q = x => Math.round(x * 4) / 4;           // l'éditeur travaille au quart de temps
+  const notes = qRec().map(n => ({ midi: n.midi, b: q(n.t * k), d: Math.max(0.25, q(n.d * k)) })), key = effKey();
+  setMode('edit'); ed = { notes, undo: [], sel: notes[0], from: 'rec', bpm, ts: +$('recTs').value, key };
+});
+function editMine(m) {
+  const sg = parseMidi(b64ToBuf(m.b64)), q = x => Math.round(x * 4) / 4, notes = [];
+  sg.steps.forEach(st => st.midis.forEach((mi, i) => notes.push({ midi: mi, b: q(st.tick / sg.tpq), d: Math.max(0.25, q(st.durs[i] / sg.tpq)) })));
+  openMode('edit', 'school');
+  ed = { notes, undo: [], sel: notes[0] || null, from: 'school', id: m.id, bpm: m.bpm, ts: Math.round(sg.tpm / sg.tpq), key: sg.key };
+}
+function edDone() {
+  if (!ed) return;
+  if (ed.from === 'rec') {
+    const k = 60000 / ed.bpm, notes = ed.notes.map(n => ({ midi: n.midi, t: n.b * k, d: n.d * k })), bpm = ed.bpm;
+    ed = null; setMode('record'); recNotes = notes; $('quant').value = '0'; $('recBpm').value = bpm;
+    $('res').textContent = 'Modifications appliquées (' + notes.length + ' notes). Vous pouvez exporter ou ajouter à l’école.';
+  } else {
+    const list = mineLoad(), m = list.find(x => x.id === ed.id);
+    if (m) { m.b64 = bytesToB64(notesToMidi(ed.notes, ed.bpm, ed.ts, ed.key)); mineSave(list); }
+    ed = null; buildSchool(); goScreen('school');
+  }
+}
+cv.addEventListener('pointerdown', e => {                // toucher une note = la sélectionner
+  if (mode !== 'edit' || !ed || !ed.hit) return;
+  const r = cv.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top; let best = null, bd = 9 * H;
+  ed.hit.forEach(h => h.notes.forEach(n => { const dd = Math.hypot(h.x - x, noteToY(midiToPos(n.midi).idx) - y); if (dd < bd) { bd = dd; best = n; } }));
+  if (best) ed.sel = best;
+});
+function renderEdit(ink) {
+  curKey = effKey(); setInk(ink); drawKeySig(curKey);
+  if (!ed) return;
+  const cols = edCols(), sp = Math.round(10.8 * H), ci = Math.max(0, cols.findIndex(c => c.notes.includes(ed.sel)));
+  const cx = Math.max(keyLimit(curKey) + 5 * H, W / 2), xOf = i => cx + (i - ci) * sp, blue = '#2a78ff';
+  ed.hit = cols.map((c, i) => ({ x: xOf(i), notes: c.notes }));
+  if (ed.sel) { ctx.fillStyle = 'rgba(42,120,255,.13)'; ctx.fillRect(cx - 3.5 * H, 0, 7 * H, CH); }
+  setInk(ink); ctx.lineWidth = 1;
+  cols.forEach((c, i) => {                                // barres de mesure
+    if (i && Math.floor(c.b / ed.ts + 1e-6) !== Math.floor(cols[i - 1].b / ed.ts + 1e-6)) {
+      const x = (xOf(i) + xOf(i - 1)) / 2; ctx.beginPath(); ctx.moveTo(x, yOf('F5')); ctx.lineTo(x, yOf('G2')); ctx.stroke(); }
+  });
+  const items = cols.map((c, i) => ({ x: xOf(i), t: c.b, midis: c.notes.map(n => n.midi), ks: c.notes.map(n => durKind(n.d, true)),
+    col: m => (i === ci && m === ed.sel.midi) ? blue : ink }));
+  drawColumns(items, (a, b) => Math.floor(a.t + 1e-6) === Math.floor(b.t + 1e-6) && b.t - a.t <= 0.5 + 1e-6, keyLimit(curKey), W + 20);
+  let info = 'Aucune note : jouez au clavier pour en ajouter.';
+  if (ed.sel) {
+    const p = midiToPos(ed.sel.midi), k = durKind(ed.sel.d, true);
+    info = 'Mesure ' + (Math.floor(ed.sel.b / ed.ts + 1e-6) + 1) + ', temps ' + (ed.sel.b % ed.ts + 1) + ' · ' + FR[LETTERS[p.idx % 7]] + Math.floor(p.idx / 7) +
+      ({ sharp: '♯', flat: '♭', nat: '♮' }[p.acc] || '') + ' · ' + DUR_NAME[k[0]] + (k[1] ? ' pointée' : '') + '. Touchez une note pour la choisir ; le clavier ajoute une note.';
+  }
+  if ($('res').textContent !== info) $('res').textContent = info;
 }
 $('exp').addEventListener('click', exportMidi);
 $('recBtn').addEventListener('click', () => setRec(!recOn));
