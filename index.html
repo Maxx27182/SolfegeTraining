@@ -63,7 +63,7 @@
   body:not([data-screen="app"]) main > :not(header):not(.menu) { display:none !important; }
   body[data-screen="home"] #back, .menu { display:none; }
   body[data-screen="home"] #home, body[data-screen="learn"] #learn, body[data-screen="school"] #school { display:block; }
-  #school h2 { font:600 1rem system-ui,sans-serif; margin:18px 0 8px; } .tile.done b::after { content:" ✓"; color:#2a9d4a; }
+  .mrow { display:flex; gap:8px; align-items:stretch; } .mrow .tile { flex:1; } .mrow .del { padding:0 12px; } #school h2 { font:600 1rem system-ui,sans-serif; margin:18px 0 8px; } .tile.done b::after { content:" ✓"; color:#2a9d4a; }
   #home .lead { font:1rem system-ui,sans-serif; color:var(--muted); margin:0 0 12px; }
   .tiles { display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:14px; }
   .tile { display:flex; flex-direction:column; gap:6px; text-align:left; padding:12px; font:inherit; color:var(--ink);
@@ -162,7 +162,7 @@
   <section id="learn" class="menu"><p class="lead">Apprendre à jouer</p><div class="tiles">
     <button class="tile" type="button" data-m="dictee" data-back="learn"><b>Lecture de notes</b><span>Reconnaissez les notes qui défilent sur la double portée.</span></button>
     <button class="tile" type="button" data-go="school"><b>École de piano</b><span>Un parcours pas à pas : main droite, main gauche, rythmes, deux mains, armures.</span></button></div></section>
-  <section id="school" class="menu"><p class="lead">École de piano : faites les exercices dans l’ordre (✓ = 80 % de notes justes).</p><div id="lessons"></div></section>
+  <section id="school" class="menu"><p class="lead">École de piano : faites les exercices dans l’ordre (✓ = 80 % de notes justes).</p><h2>Mes morceaux</h2><div id="mine"></div><div id="lessons"></div></section>
   <div class="stats dict-only">
     <span>Réponses : <b id="sRatio">0/0</b></span>
     
@@ -171,7 +171,10 @@
     <button id="restart" type="button">Redémarrer</button>
   </div>
   <div class="tools">
-    <span class="rec-only"><button id="clearRec" type="button">Effacer</button> <button id="exp" type="button">Exporter (.mid)</button></span>
+    <span class="rec-only"><button id="recBtn" type="button">● Enregistrer</button> <button id="clearRec" type="button">Effacer</button>
+      Tempo <input id="recBpm" type="number" min="30" max="200" value="80" style="width:4.2em"> Temps <select id="recTs"><option>2</option><option>3</option><option selected>4</option></select>
+      Arrondi <select id="quant"><option value="0">aucun</option><option value="1">noire</option><option value="0.5" selected>croche</option><option value="0.25">double croche</option></select>
+      <button id="exp" type="button">Exporter (.mid)</button> <button id="addSchool" type="button">Ajouter à l’école</button></span>
     <span class="prac-only"><label class="btn">Importer .mid<input type="file" id="file" accept=".mid,.midi" hidden></label>
       Mesures <input id="m1" type="number" min="1" value="1"> à <input id="m2" type="number" min="1" value="1">
       <label>Vitesse <input type="range" id="speed" min="20" max="100" step="5" value="100"> <output id="speedVal">100</output> %</label>
@@ -669,7 +672,7 @@ try { navigator.permissions.query({ name: 'midi' }).then(p => { if (p.state === 
 
 /* ================= Réglages, métronome, modes ================= */
 const $ = id => document.getElementById(id);
-const APP_VERSION = 'v24';          // à garder identique au numéro de cache dans sw.js
+const APP_VERSION = 'v25';          // à garder identique au numéro de cache dans sw.js
 $('ver').textContent = APP_VERSION;
 
 /* --- Intervalle de la dictée : listes Do2 ... Si5 --- */
@@ -686,7 +689,7 @@ function rangeChanged(e) {
 $('rangeLo').addEventListener('change', rangeChanged); $('rangeHi').addEventListener('change', rangeChanged);
 const PCS = [0, 2, 4, 5, 7, 9, 11];
 let mode = 'dictee';
-const SETTINGS = ['metOn', 'bpm', 'metVol', 'metSound', 'theme', 'sound', 'strictOct', 'octs', 'hideNames', 'showDur', 'keySig', 'realPiano', 'rangeLo', 'rangeHi', 'hilite'];
+const SETTINGS = ['metOn', 'bpm', 'metVol', 'metSound', 'theme', 'sound', 'strictOct', 'octs', 'hideNames', 'showDur', 'keySig', 'recBpm', 'recTs', 'quant', 'realPiano', 'rangeLo', 'rangeHi', 'hilite'];
 
 /* --- Réglages sauvegardés dans localStorage --- */
 function saveSettings() {
@@ -740,10 +743,11 @@ function click(t, accent) {            // premier temps de mesure : plus aigu
 }
 
 /* --- Modes --- */
-let recNotes = [], openN = {}, t0rec = 0, pr = null, song = null;
+let recNotes = [], openN = {}, t0rec = 0, pr = null, song = null, recOn = false;
 function setMode(m) {
   mode = m; document.body.dataset.mode = m;
   recNotes = []; openN = {}; pr = null; curLesson = null; $('res').textContent = '';
+  recOn = false; $('recBtn').textContent = '● Enregistrer'; if (m === 'record') $('res').textContent = 'Appuyez sur « Enregistrer », puis jouez.';
   if (m === 'dictee') restart();
   buildKeyboard();
 }
@@ -826,13 +830,38 @@ function buildSchool() {
   });
   $('lessons').innerHTML = html + '</div>';
   $('lessons').querySelectorAll('.tile').forEach(t => t.addEventListener('click', () => openLesson(+t.dataset.l)));
+  buildMine(best);
 }
-function openLesson(i) {
-  const L = LESSON_LIST[i];
+function openSong(key, title, hint, buf, bpm) {
   openMode('practice', 'school');
-  song = parseMidi(buildMidi(L)); curLesson = i;
-  $('m1').value = 1; $('m2').value = song.measures; $('bpm').value = L.o.bpm || 60; applySettings();
-  $('res').textContent = L.title + ' : ' + L.hint + ' Appuyez sur Démarrer.';
+  song = parseMidi(buf); curLesson = key;
+  $('m1').value = 1; $('m2').value = song.measures; $('bpm').value = bpm; applySettings();
+  $('res').textContent = title + ' : ' + hint + ' Appuyez sur Démarrer.';
+}
+function openLesson(i) { const L = LESSON_LIST[i]; openSong(i, L.title, L.hint, buildMidi(L), L.o.bpm || 60); }
+
+/* Mes morceaux : enregistrements gardés sur le téléphone (localStorage), avec sauvegarde / restauration en fichier .json */
+const mineLoad = () => { try { return JSON.parse(localStorage.getItem('pianoMine')) || []; } catch (e) { return []; } };
+const mineSave = l => { try { localStorage.setItem('pianoMine', JSON.stringify(l)); } catch (e) { alert('Enregistrement impossible : stockage plein ou bloqué.'); } };
+const bytesToB64 = u => { let b = ''; u.forEach(c => { b += String.fromCharCode(c); }); return btoa(b); };
+const b64ToBuf = t => Uint8Array.from(atob(t), c => c.charCodeAt(0)).buffer;
+function buildMine(best) {
+  const list = mineLoad();
+  $('mine').innerHTML = (list.length ? '<div class="tiles">' + list.map(m => '<div class="mrow"><button class="tile' + (best['m' + m.id] >= 80 ? ' done' : '') + '" type="button" data-o="' + m.id + '"><b></b><span>Joué par vous' +
+    (best['m' + m.id] ? ' · meilleur : ' + best['m' + m.id] + ' %' : '') + '</span></button><button class="del" type="button" data-d="' + m.id + '">Supprimer</button></div>').join('') + '</div>'
+    : '<p>Aucun morceau pour l’instant : dans « S’enregistrer », jouez puis appuyez sur « Ajouter à l’école ».</p>') +
+    '<p><button id="mBackup" type="button">Sauvegarder (.json)</button> <label class="btn">Restaurer<input type="file" id="mRestore" accept=".json" hidden></label></p>';
+  $('mine').querySelectorAll('[data-o]').forEach((t, k) => { const m = list.find(x => x.id === t.dataset.o); t.querySelector('b').textContent = m.title;
+    t.addEventListener('click', () => openSong('m' + m.id, m.title, 'Votre enregistrement.', b64ToBuf(m.b64), m.bpm)); });
+  $('mine').querySelectorAll('[data-d]').forEach(b => b.addEventListener('click', () => {
+    const m = list.find(x => x.id === b.dataset.d);
+    if (confirm('Supprimer « ' + m.title + ' » ?')) { mineSave(list.filter(x => x !== m)); buildSchool(); } }));
+  $('mBackup').addEventListener('click', () => { const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(mineLoad())], { type: 'application/json' })); a.download = 'mes-morceaux.json'; a.click(); });
+  $('mRestore').addEventListener('change', async e => { const f = e.target.files[0]; if (!f) return;
+    try { const add = JSON.parse(await f.text()), cur = mineLoad(), ids = new Set(cur.map(x => x.id));
+      add.forEach(m => { if (m.title && m.b64 && !ids.has(m.id)) cur.push({ id: m.id || Date.now().toString(36), title: m.title, bpm: m.bpm || 60, b64: m.b64 }); });
+      mineSave(cur); buildSchool(); } catch (err) { alert('Fichier de sauvegarde illisible.'); } });
 }
 function lessonDone(hits, tot) {            // appelée en fin d'entraînement : garde le meilleur score
   if (curLesson === null || !tot) return;
@@ -846,6 +875,7 @@ function noteOn(midi, fromMidi) {
   if (!fromMidi) playNote(midi);                          // le piano MIDI sonne déjà tout seul
   const now = performance.now();
   if (mode === 'record') {
+    if (!recOn) return;                                  // on n'enregistre qu'entre « Enregistrer » et « Arrêter »
     if (!recNotes.length) t0rec = now;
     const n = { midi, t: now - t0rec, d: 400 }; recNotes.push(n); openN[midi] = n;
   } else if (mode === 'practice') practiceHit(midi, now);
@@ -1006,9 +1036,9 @@ function renderSong(ink, red) {
   if (mode === 'record') {                                // les dernières notes jouées, la plus récente à droite
     // Notes jouées à moins de 100 ms d'écart = même accord (même colonne)
     const groups = [];
-    recNotes.forEach(n => { const g = groups[groups.length - 1]; if (g && n.t - g.t <= 100) g.notes.push(n); else groups.push({ t: n.t, notes: [n] }); });
+    qRec().forEach(n => { const g = groups[groups.length - 1]; if (g && n.t - g.t <= 100) g.notes.push(n); else groups.push({ t: n.t, notes: [n] }); });
     curKey = effKey(); setInk(ink); drawKeySig(curKey);
-    const bpmR = +$('bpm').value, dur = n => openN[n.midi] === n ? performance.now() - t0rec - n.t : n.d;   // note tenue : durée en cours
+    const bpmR = recBpmV(), dur = n => n.d;
     const items = groups.map((g, i) => ({ x: W - 40 - (groups.length - 1 - i) * Math.round(10.8 * H), t: g.t, midis: g.notes.map(n => n.midi), col: ink,
       ks: g.notes.map(n => durKind(dur(n) * bpmR / 60000)) }));
     drawColumns(items, (a, b) => (b.t - a.t) * bpmR / 60000 <= 0.8, Math.max(100.01, keyLimit(curKey)), W + 20);
@@ -1035,22 +1065,54 @@ function renderSong(ink, red) {
 
 /* --- Export : fichier MIDI standard (SMF type 0) --- */
 function vlq(n) { const b = [n & 127]; while ((n >>= 7)) b.unshift((n & 127) | 128); return b; }
-function exportMidi() {
-  if (!recNotes.length) return;
-  const bpm = +$('bpm').value, tpq = 480, k = tpq * bpm / 60000, mpq = Math.round(60000000 / bpm), ev = [];
-  recNotes.forEach(n => { ev.push([Math.round(n.t * k), 0x90, n.midi, 80]); ev.push([Math.round((n.t + n.d) * k), 0x80, n.midi, 0]); });
+const recBpmV = () => Math.min(200, Math.max(30, +$('recBpm').value || 80));
+/* Notes enregistrées, arrondies sur la grille choisie (en fraction de temps, d'après le tempo d'enregistrement) */
+function qRec() {
+  const now = performance.now(), g = +$('quant').value * 60000 / recBpmV();
+  return recNotes.map(n => {
+    let t = n.t, d = openN[n.midi] === n ? now - t0rec - n.t : n.d;       // note encore tenue : durée en cours
+    if (g) { t = Math.round(t / g) * g; d = Math.max(g, Math.round(d / g) * g); }
+    return { midi: n.midi, t, d };
+  });
+}
+function setRec(on) {
+  if (on && recNotes.length && !confirm('Remplacer l’enregistrement actuel ?')) return;
+  if (on) { recNotes = []; openN = {}; }
+  else { const t = performance.now() - t0rec; Object.values(openN).forEach(n => { n.d = Math.max(60, t - n.t); }); openN = {}; }
+  recOn = on; $('recBtn').textContent = on ? '■ Arrêter' : '● Enregistrer';
+  $('res').textContent = on ? 'Enregistrement : jouez, le temps démarre à la première note.'
+    : recNotes.length + ' notes enregistrées. Réglez tempo et arrondi, puis exportez ou ajoutez à l’école.';
+}
+function recMidiBytes() {
+  const bpm = recBpmV(), tpq = 480, k = tpq * bpm / 60000, mpq = Math.round(60000000 / bpm), ev = [];
+  qRec().forEach(n => { ev.push([Math.round(n.t * k), 0x90, n.midi, 80]); ev.push([Math.round((n.t + n.d) * k), 0x80, n.midi, 0]); });
   ev.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
-  const tr = [0, 0xFF, 0x51, 3, (mpq >> 16) & 255, (mpq >> 8) & 255, mpq & 255]; let last = 0;
+  const tr = [0, 0xFF, 0x51, 3, (mpq >> 16) & 255, (mpq >> 8) & 255, mpq & 255, 0, 0xFF, 0x58, 4, +$('recTs').value, 2, 24, 8, 0, 0xFF, 0x59, 2, effKey() & 255, 0]; let last = 0;
   ev.forEach(e => { tr.push(...vlq(e[0] - last), e[1], e[2], e[3]); last = e[0]; });
   tr.push(0, 0xFF, 0x2F, 0);
   const L = tr.length, hdr = [0x4D, 0x54, 0x68, 0x64, 0, 0, 0, 6, 0, 0, 0, 1, tpq >> 8, tpq & 255];
   const th = [0x4D, 0x54, 0x72, 0x6B, (L >>> 24) & 255, (L >> 16) & 255, (L >> 8) & 255, L & 255];
+  return new Uint8Array([...hdr, ...th, ...tr]);
+}
+function exportMidi() {
+  if (recOn) setRec(false);
+  if (!recNotes.length) return;
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([new Uint8Array([...hdr, ...th, ...tr])], { type: 'audio/midi' }));
+  a.href = URL.createObjectURL(new Blob([recMidiBytes()], { type: 'audio/midi' }));
   a.download = 'enregistrement.mid'; a.click();
 }
+function addToSchool() {
+  if (recOn) setRec(false);
+  if (!recNotes.length) { $('res').textContent = 'Rien à ajouter : enregistrez d’abord un morceau.'; return; }
+  const title = (prompt('Titre du morceau :') || '').trim(); if (!title) return;
+  const list = mineLoad(); list.push({ id: Date.now().toString(36), title, bpm: recBpmV(), b64: bytesToB64(recMidiBytes()) });
+  mineSave(list); buildSchool();
+  $('res').textContent = '« ' + title + ' » ajouté à l’école (section « Mes morceaux »).';
+}
 $('exp').addEventListener('click', exportMidi);
-$('clearRec').addEventListener('click', () => { recNotes = []; openN = {}; });
+$('recBtn').addEventListener('click', () => setRec(!recOn));
+$('addSchool').addEventListener('click', addToSchool);
+$('clearRec').addEventListener('click', () => { recNotes = []; openN = {}; recOn = false; $('recBtn').textContent = '● Enregistrer'; $('res').textContent = ''; });
 
 /* --- Import : lecture d'un fichier MIDI (notes, tempo, mesure) --- */
 function parseMidi(buf) {
