@@ -638,15 +638,15 @@ function refreshMidiInputs() {
   midiStatus(names.length ? 'Piano connecté : ' + names.join(', ') : 'Aucun piano détecté');
 }
 
-async function connectMidi() {
+async function connectMidi(silent) {   // silent = reconnexion automatique au lancement : pas de fenêtre d'erreur
   if (!navigator.requestMIDIAccess) { midiStatus('Web MIDI indisponible (utilisez Chrome sur Android)'); return; }
   try {
     midiAccess = await navigator.requestMIDIAccess();
     midiAccess.onstatechange = refreshMidiInputs;       // branchement / débranchement à chaud
     refreshMidiInputs();
-  } catch (e) { midiStatus('Accès MIDI refusé'); alert('USB/MIDI : ' + e.name + ' — ' + e.message); }
+  } catch (e) { midiStatus(silent ? 'USB/MIDI indisponible' : 'Accès MIDI refusé'); if (!silent) alert('USB/MIDI : ' + e.name + ' — ' + e.message); }
 }
-document.getElementById('midiBtn').addEventListener('click', connectMidi);
+document.getElementById('midiBtn').addEventListener('click', () => connectMidi());
 
 /* --- Bluetooth direct (Web Bluetooth + BLE-MIDI) : sans passer par Web MIDI, que Chrome Android n'applique pas au Bluetooth --- */
 const BLE_MIDI = '03b80e5a-ede8-4b33-a751-6ce34ec4c700', BLE_CHAR = '7772e5db-3868-4112-a1a9-f2669d106bf3';
@@ -688,11 +688,11 @@ document.addEventListener('visibilitychange', keepAwake);
 ['pointerdown', 'keydown'].forEach(ev => document.addEventListener(ev, keepAwake));
 keepAwake();
 // Reconnexion automatique si la permission a déjà été accordée
-try { navigator.permissions.query({ name: 'midi' }).then(p => { if (p.state === 'granted') connectMidi(); }).catch(() => {}); } catch (e) {}
+try { navigator.permissions.query({ name: 'midi' }).then(p => { if (p.state === 'granted') connectMidi(true); }).catch(() => {}); } catch (e) {}
 
 /* ================= Réglages, métronome, modes ================= */
 const $ = id => document.getElementById(id);
-const APP_VERSION = 'v27';          // à garder identique au numéro de cache dans sw.js
+const APP_VERSION = 'v28';          // à garder identique au numéro de cache dans sw.js
 $('ver').textContent = APP_VERSION;
 
 /* --- Intervalle de la dictée : listes Do2 ... Si5 --- */
