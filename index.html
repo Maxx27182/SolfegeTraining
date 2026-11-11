@@ -51,6 +51,17 @@
   header h1 { flex:1; margin:0; }
   header select, #panel select { padding:6px; font:.9rem system-ui,sans-serif; color:var(--ink); background:var(--btn);
     border:1px solid var(--line); border-radius:6px; }
+  #fs { font-size:1.4rem; line-height:1; padding:2px 8px; color:var(--ink); background:none; border:none; cursor:pointer; }
+  body:not([data-screen="app"]) #fs, body[data-mode="edit"] #fs { display:none; }
+  #fsExit { display:none; position:fixed; z-index:40; top:calc(env(safe-area-inset-top, 0px) + 6px); right:calc(env(safe-area-inset-right, 0px) + 6px);
+    width:36px; height:36px; padding:0; font:600 1rem system-ui,sans-serif; color:var(--ink); background:var(--btn);
+    border:1px solid var(--line); border-radius:50%; opacity:.55; cursor:pointer; }
+  /* Plein écran : seule la partition reste visible */
+  body.fs { overflow:hidden; } body.fs #fsExit { display:block; }
+  body.fs header, body.fs .stats, body.fs .tools, body.fs #res, body.fs #msg, body.fs #pad, body.fs #kb, body.fs .hint { display:none !important; }
+  body.fs main { max-width:none; padding:0; box-sizing:border-box; display:flex; flex-direction:column; justify-content:center;
+    min-height:calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)); }
+  body.fs #wrap { border:none; border-radius:0; }
   #gear { font-size:1.6rem; line-height:1; padding:2px 8px; color:var(--ink); background:none; border:none; cursor:pointer; }
   .tools { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:8px; font:.9rem system-ui,sans-serif; color:var(--muted); }
   .tools button, .tools .btn, #panel button { padding:6px 12px; font:600 .9rem system-ui,sans-serif; color:var(--ink);
@@ -86,7 +97,7 @@
     header #back { order:1; }
     header .range { order:2; flex:0 0 auto; margin:0 auto; white-space:nowrap; }
     header .midi { order:3; flex:0 0 auto; margin:0; flex-wrap:nowrap; gap:6px; }
-    header #ver { order:4; } header #gear { order:5; }
+    header #ver { order:4; } header #gear, header #fs { order:5; }
     body:not([data-screen="app"]) header #ver { margin-left:auto; }
     body:not([data-mode="dictee"]) header .midi { margin-left:auto; }
     header .midi button, header .range select { font-size:.8rem; padding:3px 8px; }
@@ -136,6 +147,7 @@
     <button id="back" type="button" aria-label="Retour à l’accueil">⌂ Accueil</button>
     <div class="range dict-only">Notes de <select id="rangeLo" aria-label="Première note"></select> à <select id="rangeHi" aria-label="Dernière note"></select></div>
     <div class="midi"><button id="midiBtn" type="button">Piano USB</button><button id="bleBtn" type="button">Piano Bluetooth</button><span id="midiStatus">Aucun piano connecté</span></div>
+    <button id="fs" type="button" aria-label="Plein écran (partition seule)">⛶</button>
     <button id="gear" type="button" aria-label="Paramètres">⚙︎</button></header>
   <section id="home" class="menu">
     <p class="lead">Que voulez-vous travailler aujourd’hui ?</p>
@@ -195,6 +207,7 @@
   <div id="kb"></div>
   <div class="hint">Sous chaque bouton, choisissez la touche du clavier associée (une seule lettre, mémorisée).</div>
 </main>
+<button id="fsExit" type="button" aria-label="Quitter le plein écran">✕</button>
 <div id="panel"><div class="sheet">
   <h2>Paramètres</h2>
   <div class="row"><label><input type="checkbox" id="metOn"> Métronome</label><span><output id="bpmVal">80</output> bpm</span></div>
@@ -679,7 +692,7 @@ try { navigator.permissions.query({ name: 'midi' }).then(p => { if (p.state === 
 
 /* ================= Réglages, métronome, modes ================= */
 const $ = id => document.getElementById(id);
-const APP_VERSION = 'v26';          // à garder identique au numéro de cache dans sw.js
+const APP_VERSION = 'v27';          // à garder identique au numéro de cache dans sw.js
 $('ver').textContent = APP_VERSION;
 
 /* --- Intervalle de la dictée : listes Do2 ... Si5 --- */
@@ -753,6 +766,7 @@ function click(t, accent) {            // premier temps de mesure : plus aigu
 let recNotes = [], openN = {}, t0rec = 0, pr = null, song = null, recOn = false;
 function setMode(m) {
   mode = m; document.body.dataset.mode = m;
+  if (document.body.classList.contains('fs')) setFs(false);
   recNotes = []; openN = {}; pr = null; curLesson = null; $('res').textContent = '';
   recOn = false; $('recBtn').textContent = '● Enregistrer'; if (m === 'record') $('res').textContent = 'Appuyez sur « Enregistrer », puis jouez.';
   if (m === 'dictee') restart();
@@ -761,6 +775,7 @@ function setMode(m) {
 let backTo = 'home', curLesson = null;
 const BACK = { learn: 'home', school: 'learn' };
 function goScreen(sc) {
+  if (document.body.classList.contains('fs')) setFs(false);
   document.body.dataset.screen = sc;
   const to = sc === 'app' ? backTo : BACK[sc];
   $('back').textContent = to === 'home' ? '⌂ Accueil' : '← Retour';
@@ -770,6 +785,20 @@ function openMode(m, from = 'home') { backTo = from; setMode(m); goScreen('app')
 document.querySelectorAll('.tile[data-m],.tile[data-go]').forEach(t => t.addEventListener('click', () =>
   t.dataset.go ? goScreen(t.dataset.go) : openMode(t.dataset.m, t.dataset.back || 'home')));
 $('back').addEventListener('click', () => { const sc = document.body.dataset.screen; goScreen(sc === 'app' ? backTo : BACK[sc]); });
+
+/* --- Plein écran : n'affiche que la partition (API Fullscreen si disponible, sinon simple masquage) --- */
+function setFs(on) {
+  document.body.classList.toggle('fs', on);
+  try {
+    if (on && document.documentElement.requestFullscreen) { const r = document.documentElement.requestFullscreen(); if (r && r.catch) r.catch(() => {}); }
+    else if (!on && document.fullscreenElement) { const r = document.exitFullscreen(); if (r && r.catch) r.catch(() => {}); }
+  } catch (e) {}
+  window.scrollTo(0, 0); resize();
+}
+$('fs').addEventListener('click', () => setFs(true));
+$('fsExit').addEventListener('click', () => setFs(false));
+document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && document.body.classList.contains('fs')) setFs(false); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && document.body.classList.contains('fs')) setFs(false); });
 
 /* --- École de piano : exercices écrits en notation compacte, convertis en fichier MIDI puis joués par le mode entraînement ---
    Notation : "C4 D4:2 E4+G4:.5 r:1"  (note + octave, # ou b, '+' = accord, :durée en temps (1 par défaut), r = silence) */
@@ -802,7 +831,11 @@ const LESSONS = [
   ['Valse simple (3 temps)', 'Comptez 1-2-3, mains ensemble.', 'G4 E4 E4 F4 D4 D4 C4 D4 E4 F4 G4 G4', 'C3:3 G2:3 C3:3 C3:3', { ts: 3 }]] },
  { g: '6 · Les armures', items: [
   ['Gamme de Sol (1 dièse)', 'Le Fa devient Fa dièse.', 'G4 A4 B4 C5 D5 E5 F#5 G5 G5 F#5 E5 D5 C5 B4 A4 G4', null, { key: 1, bpm: 70 }],
-  ['Gamme de Fa (1 bémol)', 'Le Si devient Si bémol.', 'F4 G4 A4 Bb4 C5 D5 E5 F5 F5 E5 D5 C5 Bb4 A4 G4 F4', null, { key: -1, bpm: 70 }]] }];
+  ['Gamme de Fa (1 bémol)', 'Le Si devient Si bémol.', 'F4 G4 A4 Bb4 C5 D5 E5 F5 F5 E5 D5 C5 Bb4 A4 G4 F4', null, { key: -1, bpm: 70 }]] },
+ { g: '7 · Comptines', items: [
+  ['Au clair de la lune (complet)', 'Les quatre phrases, main droite.', 'C4 C4 C4 D4 E4:2 D4:2 C4 E4 D4 D4 C4:4 C4 C4 C4 D4 E4:2 D4:2 C4 E4 D4 D4 C4:4 D4 D4 D4 D4 A3:2 A3:2 D4 C4 B3 A3 G3:4 C4 C4 C4 D4 E4:2 D4:2 C4 E4 D4 D4 C4:4'],
+  ['Frère Jacques (complet)', 'Chaque phrase se joue deux fois.', 'C4 D4 E4 C4 C4 D4 E4 C4 E4 F4 G4:2 E4 F4 G4:2 G4:.5 A4:.5 G4:.5 F4:.5 E4 C4 G4:.5 A4:.5 G4:.5 F4:.5 E4 C4 C4 G3 C4:2 C4 G3 C4:2'],
+  ['Ah ! vous dirai-je, maman', 'Trois phrases, la 1re reprise à la fin.', 'C4 C4 G4 G4 A4 A4 G4:2 F4 F4 E4 E4 D4 D4 C4:2 G4 G4 F4 F4 E4 E4 D4:2 G4 G4 F4 F4 E4 E4 D4:2 C4 C4 G4 G4 A4 A4 G4:2 F4 F4 E4 E4 D4 D4 C4:2']] }];
 const LESSON_LIST = []; LESSONS.forEach(g => g.items.forEach(it => LESSON_LIST.push({ g: g.g, title: it[0], hint: it[1], rh: it[2], lh: it[3], o: it[4] || {} })));
 
 function buildMidi(L) {
@@ -1339,6 +1372,7 @@ function finishPractice() {
     'Dans le rythme (±100 ms) : <b>' + (n ? Math.round(100 * d.filter(x => Math.abs(x) < 100).length / n) : 0) + ' %</b>';
   if (pr.wait) $('res').innerHTML = 'Notes justes : <b>' + pr.hits + '/' + tot + '</b> · fausses notes : <b>' + pr.wrong + '</b><br>(mode attente : pas de statistique de rythme)';
   lessonDone(pr.hits, tot);
+  if (document.body.classList.contains('fs')) setFs(false);   // pour voir le résultat
 }
 
 /* --- Mise en avant de la touche à jouer (clavier à l'écran, et boutons Do..Si en dictée) ---
@@ -1366,7 +1400,8 @@ function updateKeyHighlight() {
 function resize() {
   const dpr = window.devicePixelRatio || 1;
   // Échelle : en paysage sur écran bas, la partition est réduite pour laisser la place au clavier
-  H = (matchMedia('(orientation: landscape)').matches && window.innerHeight < 520) ? 5 : 7;
+  H = document.body.classList.contains('fs') ? Math.max(5, Math.min(8, Math.floor((window.innerHeight - 8) / 36)))   // plein écran : la partition occupe la hauteur
+    : (matchMedia('(orientation: landscape)').matches && window.innerHeight < 520) ? 5 : 7;
   S = 2 * H; Y_C4 = 17.5 * H; CH = Math.round(36 * H);
   cv.style.height = CH + 'px';
   W = cv.clientWidth;
