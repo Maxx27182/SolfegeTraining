@@ -668,9 +668,14 @@ async function connectBle() {
     midiStatus('Connexion à ' + (dev.name || 'piano') + '…');
     dev.addEventListener('gattserverdisconnected', () => midiStatus('Bluetooth déconnecté'));
     const srv = await dev.gatt.connect(), ch = await (await srv.getPrimaryService(BLE_MIDI)).getCharacteristic(BLE_CHAR);
-    ch.addEventListener('characteristicvaluechanged', e => parseBle(new Uint8Array(e.target.value.buffer, e.target.value.byteOffset, e.target.value.byteLength)));
+    const nom = dev.name || 'piano'; let paquets = 0;
+    ch.addEventListener('characteristicvaluechanged', e => {
+      if (!paquets++) midiStatus('Bluetooth : ' + nom + ' ✓ notes reçues');          // preuve que les données arrivent
+      parseBle(new Uint8Array(e.target.value.buffer, e.target.value.byteOffset, e.target.value.byteLength));
+    });
+    try { await ch.readValue(); } catch (e) {}      // la spécification BLE-MIDI demande une lecture : elle déclenche l'appairage sur Windows / macOS
     await ch.startNotifications();
-    midiStatus('Bluetooth : ' + (dev.name || 'piano'));
+    midiStatus('Bluetooth : ' + nom + ' – jouez une note…');
   } catch (e) {
     midiStatus(e.name === 'NotFoundError' ? 'Aucun piano choisi' : 'Échec Bluetooth');
     if (e.name !== 'NotFoundError') alert('Bluetooth : ' + e.name + ' — ' + e.message);
@@ -692,7 +697,7 @@ try { navigator.permissions.query({ name: 'midi' }).then(p => { if (p.state === 
 
 /* ================= Réglages, métronome, modes ================= */
 const $ = id => document.getElementById(id);
-const APP_VERSION = 'v28';          // à garder identique au numéro de cache dans sw.js
+const APP_VERSION = 'v29';          // à garder identique au numéro de cache dans sw.js
 $('ver').textContent = APP_VERSION;
 
 /* --- Intervalle de la dictée : listes Do2 ... Si5 --- */
