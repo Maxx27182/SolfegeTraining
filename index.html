@@ -663,22 +663,35 @@ function parseBle(d) {                       // paquet BLE-MIDI : en-tête, puis
 }
 async function connectBle() {
   if (!navigator.bluetooth) { midiStatus('Bluetooth indisponible'); alert('Web Bluetooth n’est pas disponible ici. Utilisez Chrome sur Android, en HTTPS (GitHub Pages).'); return; }
+  let dev = null, etape = 'choix du piano';
+  const pause = ms => new Promise(r => setTimeout(r, ms));
+  // Windows : une opération GATT peut échouer « pour raison inconnue » pendant l'appairage ; on réessaie quelques fois
+  const reessayer = async (fn, n = 5) => { for (let i = 1; ; i++) { try { return await fn(); } catch (e) { if (i >= n) throw e; await pause(900); } } };
   try {
-    const dev = await navigator.bluetooth.requestDevice({ filters: [{ services: [BLE_MIDI] }, { namePrefix: 'FP-10' }], optionalServices: [BLE_MIDI] });
-    midiStatus('Connexion à ' + (dev.name || 'piano') + '…');
-    dev.addEventListener('gattserverdisconnected', () => midiStatus('Bluetooth déconnecté'));
-    const srv = await dev.gatt.connect(), ch = await (await srv.getPrimaryService(BLE_MIDI)).getCharacteristic(BLE_CHAR);
+    dev = await navigator.bluetooth.requestDevice({ filters: [{ services: [BLE_MIDI] }, { namePrefix: 'FP-10' }], optionalServices: [BLE_MIDI] });
     const nom = dev.name || 'piano'; let paquets = 0;
+    midiStatus('Connexion à ' + nom + '…');
+    dev.addEventListener('gattserverdisconnected', () => midiStatus('Bluetooth déconnecté'));
+    etape = 'connexion GATT';
+    const srv = await reessayer(() => dev.gatt.connect());
+    etape = 'service MIDI';
+    const svc = await reessayer(() => srv.getPrimaryService(BLE_MIDI));
+    etape = 'canal MIDI';
+    const ch = await reessayer(() => svc.getCharacteristic(BLE_CHAR));
     ch.addEventListener('characteristicvaluechanged', e => {
       if (!paquets++) midiStatus('Bluetooth : ' + nom + ' ✓ notes reçues');          // preuve que les données arrivent
       parseBle(new Uint8Array(e.target.value.buffer, e.target.value.byteOffset, e.target.value.byteLength));
     });
+    etape = 'lecture (appairage)';
+    midiStatus('Appairage de ' + nom + '…');
     try { await ch.readValue(); } catch (e) {}      // la spécification BLE-MIDI demande une lecture : elle déclenche l'appairage sur Windows / macOS
-    await ch.startNotifications();
+    etape = 'activation des notifications';
+    await reessayer(() => ch.startNotifications());
     midiStatus('Bluetooth : ' + nom + ' – jouez une note…');
   } catch (e) {
+    try { if (dev && dev.gatt && dev.gatt.connected) dev.gatt.disconnect(); } catch (x) {}   // libère le piano pour le prochain essai
     midiStatus(e.name === 'NotFoundError' ? 'Aucun piano choisi' : 'Échec Bluetooth');
-    if (e.name !== 'NotFoundError') alert('Bluetooth : ' + e.name + ' — ' + e.message);
+    if (e.name !== 'NotFoundError') alert('Bluetooth (' + etape + ') : ' + e.name + ' — ' + e.message);
   }
 }
 document.getElementById('bleBtn').addEventListener('click', connectBle);
@@ -697,7 +710,7 @@ try { navigator.permissions.query({ name: 'midi' }).then(p => { if (p.state === 
 
 /* ================= Réglages, métronome, modes ================= */
 const $ = id => document.getElementById(id);
-const APP_VERSION = 'v29';          // à garder identique au numéro de cache dans sw.js
+const APP_VERSION = 'v30';          // à garder identique au numéro de cache dans sw.js
 $('ver').textContent = APP_VERSION;
 
 /* --- Intervalle de la dictée : listes Do2 ... Si5 --- */
