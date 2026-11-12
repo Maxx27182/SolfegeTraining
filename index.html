@@ -688,10 +688,12 @@ async function connectBle() {
     etape = 'activation des notifications';
     await reessayer(() => ch.startNotifications());
     midiStatus('Bluetooth : ' + nom + ' – jouez une note…');
+    setTimeout(() => { const st = document.getElementById('midiStatus'); if (!paquets && st.textContent.includes('jouez une note')) st.textContent = 'Aucune note reçue. Sous Windows : appairez le piano, puis utilisez « Piano USB »'; }, 10000);
   } catch (e) {
     try { if (dev && dev.gatt && dev.gatt.connected) dev.gatt.disconnect(); } catch (x) {}   // libère le piano pour le prochain essai
     midiStatus(e.name === 'NotFoundError' ? 'Aucun piano choisi' : 'Échec Bluetooth');
-    if (e.name !== 'NotFoundError') alert('Bluetooth (' + etape + ') : ' + e.name + ' — ' + e.message);
+    if (e.name !== 'NotFoundError') alert('Bluetooth (' + etape + ') : ' + e.name + ' — ' + e.message
+      + (/Windows/.test(navigator.userAgent) ? '\n\nSous Windows : appairez d’abord le piano dans Paramètres › Bluetooth, puis utilisez le bouton « Piano USB » (Web MIDI).' : ''));
   }
 }
 document.getElementById('bleBtn').addEventListener('click', connectBle);
@@ -710,7 +712,7 @@ try { navigator.permissions.query({ name: 'midi' }).then(p => { if (p.state === 
 
 /* ================= Réglages, métronome, modes ================= */
 const $ = id => document.getElementById(id);
-const APP_VERSION = 'v30';          // à garder identique au numéro de cache dans sw.js
+const APP_VERSION = 'v31';          // à garder identique au numéro de cache dans sw.js
 $('ver').textContent = APP_VERSION;
 
 /* --- Intervalle de la dictée : listes Do2 ... Si5 --- */
