@@ -633,8 +633,12 @@ function onMidiMessage(ev) {
 }
 
 function refreshMidiInputs() {
-  const names = [];
-  midiAccess.inputs.forEach(inp => { inp.onmidimessage = onMidiMessage; names.push(inp.name); });
+  const names = []; let recu = false;
+  midiAccess.inputs.forEach(inp => {
+    inp.onmidimessage = ev => { if (!recu) { recu = true; midiStatus('Piano connecté : ' + inp.name + ' ✓ notes reçues'); } onMidiMessage(ev); };   // ✓ = preuve que les notes arrivent
+    try { const r = inp.open(); if (r && r.catch) r.catch(() => {}); } catch (e) {}                                                              // ouverture explicite du port
+    names.push(inp.name + (inp.connection === 'open' ? '' : ' (' + inp.connection + ')'));
+  });
   midiStatus(names.length ? 'Piano connecté : ' + names.join(', ') : 'Aucun piano détecté');
 }
 
@@ -712,7 +716,7 @@ try { navigator.permissions.query({ name: 'midi' }).then(p => { if (p.state === 
 
 /* ================= Réglages, métronome, modes ================= */
 const $ = id => document.getElementById(id);
-const APP_VERSION = 'v31';          // à garder identique au numéro de cache dans sw.js
+const APP_VERSION = 'v32';          // à garder identique au numéro de cache dans sw.js
 $('ver').textContent = APP_VERSION;
 
 /* --- Intervalle de la dictée : listes Do2 ... Si5 --- */
