@@ -23,11 +23,6 @@
     font-family: Georgia, "Times New Roman", serif; }
   main { max-width: 920px; margin: 0 auto; padding: 16px 12px 28px; }
   h1 { font-size: 1.35rem; margin: 4px 0 12px; font-weight: 600; }
-  .stats { display:flex; flex-wrap:wrap; gap:6px 22px; margin-bottom:10px;
-    font-family: system-ui, sans-serif; font-size:.95rem; color:var(--muted); }
-  .stats b { color:var(--ink); font-variant-numeric: tabular-nums; }
-  .stats button { padding:4px 12px; font:600 .9rem system-ui,sans-serif; color:var(--ink); background:var(--btn);
-    border:1px solid var(--line); border-radius:6px; cursor:pointer; }
   #wrap { background:var(--card); border:1px solid var(--line); border-radius:6px; }
   canvas { display:block; width:100%; height:240px; }
   #msg { min-height:1.4em; margin:8px 0; font-family:system-ui,sans-serif; font-size:.95rem; }
@@ -41,10 +36,11 @@
     border:1px solid var(--line); border-radius:6px; text-transform:uppercase; }
   button:focus-visible, input:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
   .hint { margin-top:8px; font:.82rem system-ui,sans-serif; color:var(--muted); }
-  .midi { display:flex; flex-wrap:wrap; align-items:center; gap:6px 12px; margin-bottom:10px; font:.9rem system-ui,sans-serif; color:var(--muted); }
-  .midi button { padding:4px 12px; font:600 .9rem system-ui,sans-serif; color:var(--ink); background:var(--btn);
+  /* Ligne d'infos de l'en-tête : vitesse (dictée), Redémarrer, état du piano */
+  .hinfo { display:flex; flex-wrap:wrap; align-items:center; gap:4px 12px; font:.9rem system-ui,sans-serif; color:var(--muted); }
+  .hinfo b { color:var(--ink); font-variant-numeric:tabular-nums; }
+  .hinfo button { padding:4px 12px; font:600 .9rem system-ui,sans-serif; color:var(--ink); background:var(--btn);
     border:1px solid var(--line); border-radius:6px; cursor:pointer; }
-  .midi label { display:flex; align-items:center; gap:4px; }
   :root[data-theme="dark"] { --bg:#121212; --card:#1c1c1c; --ink:#f2f2f2; --muted:#9a9a9a; --line:#3a3a3a;
     --accent:#ff5a5a; --ok:#6fcf86; --btn:#2a2a2a; color-scheme: dark; }
   header { display:flex; align-items:center; gap:8px; margin:4px 0 12px; }
@@ -58,10 +54,11 @@
     border:1px solid var(--line); border-radius:50%; opacity:.55; cursor:pointer; }
   /* Plein écran : seule la partition reste visible */
   body.fs { overflow:hidden; } body.fs #fsExit { display:block; }
-  body.fs header, body.fs .stats, body.fs .tools, body.fs #res, body.fs #msg, body.fs #pad, body.fs #kb, body.fs .hint { display:none !important; }
+  body.fs header, body.fs .tools, body.fs #res, body.fs #msg, body.fs #pad, body.fs #kb, body.fs .hint { display:none !important; }
   body.fs main { max-width:none; padding:0; box-sizing:border-box; display:flex; flex-direction:column; justify-content:center;
     min-height:calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)); }
   body.fs #wrap { border:none; border-radius:0; }
+  body.fs #stage { margin:auto 0; }
   #gear { font-size:1.6rem; line-height:1; padding:2px 8px; color:var(--ink); background:none; border:none; cursor:pointer; }
   .tools { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:8px; font:.9rem system-ui,sans-serif; color:var(--muted); }
   .tools button, .tools .btn, #panel button { padding:6px 12px; font:600 .9rem system-ui,sans-serif; color:var(--ink);
@@ -69,11 +66,18 @@
   .tools input[type=number] { width:56px; padding:5px; color:var(--ink); background:var(--card); border:1px solid var(--line); border-radius:6px; }
   #res { font:.95rem/1.5 system-ui,sans-serif; margin:8px 0; min-height:1.2em; }
   #ver { font:.75rem system-ui,sans-serif; color:var(--muted); }
-  .range { margin-bottom:10px; font:.9rem system-ui,sans-serif; color:var(--muted); }
-  .range select { padding:6px; font:.9rem system-ui,sans-serif; color:var(--ink); background:var(--btn); border:1px solid var(--line); border-radius:6px; }
   body:not([data-screen="app"]) main > :not(header):not(.menu) { display:none !important; }
   body[data-screen="home"] #back, .menu { display:none; }
-  body[data-screen="home"] #home, body[data-screen="learn"] #learn, body[data-screen="school"] #school { display:block; }
+  body[data-screen="home"] #home, body[data-screen="learn"] #learn, body[data-screen="school"] #school, body[data-screen="library"] #library { display:block; }
+  /* Bibliothèque */
+  #library .lead { font:1rem system-ui,sans-serif; color:var(--muted); margin:0 0 10px; }
+  #libQ { width:100%; box-sizing:border-box; padding:8px 10px; font:1rem system-ui,sans-serif; color:var(--ink); background:var(--card); border:1px solid var(--line); border-radius:6px; }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; margin:10px 0 14px; }
+  .chip { padding:3px 10px; font:.85rem system-ui,sans-serif; color:var(--ink); background:var(--btn); border:1px solid var(--line); border-radius:14px; cursor:pointer; }
+  .chip small { color:var(--muted); } .chip.on { background:var(--accent); border-color:var(--accent); color:#fff; } .chip.on small { color:#fff; }
+  #library .acts button, #library .mrow .del { padding:6px 12px; font:600 .9rem system-ui,sans-serif; color:var(--ink); background:var(--btn); border:1px solid var(--line); border-radius:8px; cursor:pointer; }
+  #library .mrow .del { font-size:1.1rem; }
+  #library .acts { margin:14px 0 4px; display:flex; flex-wrap:wrap; gap:8px; }
   .mrow { display:flex; gap:8px; align-items:stretch; } .mrow .tile { flex:1; } .mrow .del { padding:0 12px; } #school h2 { font:600 1rem system-ui,sans-serif; margin:18px 0 8px; } .tile.done b::after { content:" ✓"; color:#2a9d4a; }
   #home .lead { font:1rem system-ui,sans-serif; color:var(--muted); margin:0 0 12px; }
   .tiles { display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:14px; }
@@ -86,21 +90,24 @@
   .s { fill:none; stroke:var(--ink); stroke-width:1.2; } .f { fill:var(--ink); } .w { fill:#fff; stroke:#000; stroke-width:1; }
   .r { fill:var(--accent); stroke:var(--accent); stroke-width:2.5; } .g { fill:#2a9d4a; }
   .credit { font:.75rem system-ui,sans-serif; color:var(--muted); margin:6px 0; }
-  /* En-tête : connexion MIDI et intervalle de notes */
+  /* En-tête : une seule ligne d'infos sous le titre (portrait) */
   header { flex-wrap:wrap; }
-  header .range, header .midi { flex:0 0 100%; margin:0 0 8px; }
-  header .midi { order:6; } header .range { order:7; }
-  body:not([data-screen="app"]) header .range, body:not([data-screen="app"]) header .midi { display:none; }
+  header .hinfo { flex:0 0 100%; order:6; margin:0 0 4px; }
+  body:not([data-screen="app"]) header .hinfo { display:none; }
+  /* Partition + piano centrés verticalement dans l'espace restant */
+  body[data-screen="app"] main { display:flex; flex-direction:column; box-sizing:border-box;
+    min-height:calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)); }
+  #stage { margin:auto 0; }
+  /* Zones vides : on ne réserve pas de place */
+  body[data-mode="dictee"] .tools, #res:empty { display:none; }
   @media (orientation: landscape) {
-    /* Une seule ligne : Accueil | intervalle (au centre) | MIDI | version | réglages */
+    /* Une seule ligne : Accueil | vitesse + Redémarrer + état du piano | version | plein écran | réglages */
     header { flex-wrap:nowrap; gap:8px; margin:0 0 6px; }
     header #back { order:1; }
-    header .range { order:2; flex:0 0 auto; margin:0 auto; white-space:nowrap; }
-    header .midi { order:3; flex:0 0 auto; margin:0; flex-wrap:nowrap; gap:6px; }
+    header .hinfo { order:3; flex:0 0 auto; margin:0 auto; flex-wrap:nowrap; gap:6px 10px; white-space:nowrap; font-size:.8rem; }
     header #ver { order:4; } header #gear, header #fs { order:5; }
     body:not([data-screen="app"]) header #ver { margin-left:auto; }
-    body:not([data-mode="dictee"]) header .midi { margin-left:auto; }
-    header .midi button, header .range select { font-size:.8rem; padding:3px 8px; }
+    header .hinfo button { font-size:.8rem; padding:3px 8px; }
     #midiStatus { max-width:26vw; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:.8rem; }
   }
   .tools label { display:flex; align-items:center; gap:4px; } .tools input[type=range] { width:90px; }
@@ -135,7 +142,6 @@
     main { padding-top:8px; padding-bottom:12px; }
     h1, .hint, #pad { display:none; }
     #kb { display:block; }
-    .stats { margin-bottom:6px; }
     #msg { margin:4px 0; min-height:1.2em; }
   }
 </style>
@@ -145,8 +151,10 @@
   <header><h1>Lecture à vue – piano</h1>
     <span id="ver"></span>
     <button id="back" type="button" aria-label="Retour à l’accueil">⌂ Accueil</button>
-    <div class="range dict-only">Notes de <select id="rangeLo" aria-label="Première note"></select> à <select id="rangeHi" aria-label="Dernière note"></select></div>
-    <div class="midi"><button id="midiBtn" type="button">Piano USB</button><button id="bleBtn" type="button">Piano Bluetooth</button><span id="midiStatus">Aucun piano connecté</span></div>
+    <div class="hinfo">
+      <span class="dict-only">Vitesse : <b id="sRate">0,0</b> notes/s · <b id="sPace">–</b> s/note</span>
+      <button id="restart" class="dict-only" type="button">Redémarrer</button>
+      <span id="midiStatus">Aucun piano connecté</span></div>
     <button id="fs" type="button" aria-label="Plein écran (partition seule)">⛶</button>
     <button id="gear" type="button" aria-label="Paramètres">⚙︎</button></header>
   <section id="home" class="menu">
@@ -169,19 +177,15 @@
           <g class="f"><ellipse cx="115" cy="35" rx="7" ry="5" transform="rotate(-20 115 35)"/><ellipse cx="150" cy="50" rx="7" ry="5" transform="rotate(-20 150 50)"/><ellipse cx="185" cy="30" rx="7" ry="5" transform="rotate(-20 185 30)"/></g>
           <path class="s" d="M31 54V26M66 44V16M121 34V6M156 49V21M191 29V1"/><path class="r" d="M90 12V78"/><path class="r" d="M90 5L102 11L90 17Z"/></svg>
         <b>S’entraîner sur un morceau</b><span>Importez un fichier .mid et suivez la partition au piano, mesure par mesure.</span></button>
+      <button class="tile" type="button" data-go="library">
+        <svg viewBox="0 0 200 90" aria-hidden="true"><path class="s" d="M40 22H175M40 45H175M40 68H175"/><g class="f"><circle cx="24" cy="22" r="5"/><circle cx="24" cy="45" r="5"/><circle cx="24" cy="68" r="5"/></g><path class="r" d="M90 12V78"/></svg>
+        <b>Bibliothèque de morceaux</b><span>Vos fichiers .mid classés par étiquettes, avec recherche.</span></button>
     </div>
   </section>
   <section id="learn" class="menu"><p class="lead">Apprendre à jouer</p><div class="tiles">
     <button class="tile" type="button" data-m="dictee" data-back="learn"><b>Lecture de notes</b><span>Reconnaissez les notes qui défilent sur la double portée.</span></button>
     <button class="tile" type="button" data-go="school"><b>École de piano</b><span>Un parcours pas à pas : main droite, main gauche, rythmes, deux mains, armures.</span></button></div></section>
   <section id="school" class="menu"><p class="lead">École de piano : faites les exercices dans l’ordre (✓ = 80 % de notes justes).</p><h2>Mes morceaux</h2><div id="mine"></div><div id="lessons"></div></section>
-  <div class="stats dict-only">
-    <span>Réponses : <b id="sRatio">0/0</b></span>
-    
-    
-    <span>Vitesse : <b id="sRate">0,0</b> notes/s · <b id="sPace">–</b> s/note</span>
-    <button id="restart" type="button">Redémarrer</button>
-  </div>
   <div class="tools">
     <span class="rec-only"><button id="recBtn" type="button">● Enregistrer</button> <button id="clearRec" type="button">Effacer</button>
       Tempo <input id="recBpm" type="number" min="30" max="200" value="80" style="width:4.2em"> Temps <select id="recTs"><option>2</option><option>3</option><option selected>4</option></select>
@@ -201,15 +205,23 @@
       <button id="start" type="button">▶ Démarrer</button></span>
   </div>
   <div id="res"></div>
-  <div id="wrap"><canvas id="cv"></canvas></div>
-  <div id="msg" class="dict-only"></div>
-  <div id="pad"></div>
-  <div id="kb"></div>
-  <div class="hint">Sous chaque bouton, choisissez la touche du clavier associée (une seule lettre, mémorisée).</div>
+  <section id="library" class="menu"><p class="lead">Bibliothèque : touchez un morceau pour l’ouvrir en entraînement. ☆ = favori, 🏷 = étiquettes.</p>
+    <input id="libQ" type="search" placeholder="Rechercher (titre, étiquette…)" aria-label="Rechercher un morceau" autocomplete="off">
+    <div id="libChips" class="chips"></div><div id="libList"></div><p id="libMsg" class="credit"></p>
+    <div class="acts"><button id="libRefresh" type="button">Actualiser</button> <button id="libAnalyze" type="button">Tout analyser (et garder hors ligne)</button> <button id="libExport" type="button">Exporter les étiquettes</button></div></section>
+  <div id="stage">
+    <div id="wrap"><canvas id="cv"></canvas></div>
+    <div id="msg" class="dict-only"></div>
+    <div id="pad"></div>
+    <div id="kb"></div>
+    <div class="hint">Sous chaque bouton, choisissez la touche du clavier associée (une seule lettre, mémorisée).</div>
+  </div>
 </main>
 <button id="fsExit" type="button" aria-label="Quitter le plein écran">✕</button>
 <div id="panel"><div class="sheet">
   <h2>Paramètres</h2>
+  <div class="row"><button id="bleBtn" type="button">Connecter un piano en Bluetooth</button></div>
+  <div class="row dict-only"><span>Notes de la dictée</span><span><select id="rangeLo" aria-label="Première note"></select> à <select id="rangeHi" aria-label="Dernière note"></select></span></div>
   <div class="row"><label><input type="checkbox" id="metOn"> Métronome</label><span><output id="bpmVal">80</output> bpm</span></div>
   <div class="row"><input type="range" id="bpm" min="20" max="200" value="80" aria-label="Fréquence"></div>
   <div class="row">Volume du clac <input type="range" id="metVol" min="0" max="100" value="60"></div>
@@ -419,9 +431,7 @@ function checkAnswer(letter, midi) {
 }
 
 function updateStats() {
-  document.getElementById('sRatio').textContent = stats.ok + '/' + stats.total;
-  
-  
+  // plus d'affichage « Réponses » : les compteurs servent seulement au calcul de la vitesse
 }
 
 /* Vitesse = bonnes réponses / temps écoulé (1 décimale), mise à jour en continu. */
@@ -650,7 +660,6 @@ async function connectMidi(silent) {   // silent = reconnexion automatique au la
     refreshMidiInputs();
   } catch (e) { midiStatus(silent ? 'USB/MIDI indisponible' : 'Accès MIDI refusé'); if (!silent) alert('USB/MIDI : ' + e.name + ' — ' + e.message); }
 }
-document.getElementById('midiBtn').addEventListener('click', () => connectMidi());
 
 /* --- Bluetooth direct (Web Bluetooth + BLE-MIDI) : sans passer par Web MIDI, que Chrome Android n'applique pas au Bluetooth --- */
 const BLE_MIDI = '03b80e5a-ede8-4b33-a751-6ce34ec4c700', BLE_CHAR = '7772e5db-3868-4112-a1a9-f2669d106bf3';
@@ -700,7 +709,7 @@ async function connectBle() {
       + (/Windows/.test(navigator.userAgent) ? '\n\nSous Windows : appairez d’abord le piano dans Paramètres › Bluetooth, puis utilisez le bouton « Piano USB » (Web MIDI).' : ''));
   }
 }
-document.getElementById('bleBtn').addEventListener('click', connectBle);
+document.getElementById('bleBtn').addEventListener('click', () => { document.getElementById('panel').classList.remove('open'); connectBle(); });   // le panneau se ferme : l'état s'affiche dans l'en-tête
 
 /* --- Écran toujours allumé (Wake Lock) : redemandé au retour sur la page et au premier toucher --- */
 let wakeLock = null;
@@ -711,12 +720,12 @@ async function keepAwake() {
 document.addEventListener('visibilitychange', keepAwake);
 ['pointerdown', 'keydown'].forEach(ev => document.addEventListener(ev, keepAwake));
 keepAwake();
-// Reconnexion automatique si la permission a déjà été accordée
-try { navigator.permissions.query({ name: 'midi' }).then(p => { if (p.state === 'granted') connectMidi(true); }).catch(() => {}); } catch (e) {}
+// Connexion USB / MIDI automatique au lancement (plus de bouton) ; Chrome peut demander l'autorisation la première fois
+try { navigator.permissions.query({ name: 'midi' }).then(p => { if (p.state !== 'denied') connectMidi(true); }).catch(() => connectMidi(true)); } catch (e) { connectMidi(true); }
 
 /* ================= Réglages, métronome, modes ================= */
 const $ = id => document.getElementById(id);
-const APP_VERSION = 'v32';          // à garder identique au numéro de cache dans sw.js
+const APP_VERSION = 'v34';          // à garder identique au numéro de cache dans sw.js
 $('ver').textContent = APP_VERSION;
 
 /* --- Intervalle de la dictée : listes Do2 ... Si5 --- */
@@ -797,13 +806,14 @@ function setMode(m) {
   buildKeyboard();
 }
 let backTo = 'home', curLesson = null;
-const BACK = { learn: 'home', school: 'learn' };
+const BACK = { learn: 'home', school: 'learn', library: 'home' };
 function goScreen(sc) {
   if (document.body.classList.contains('fs')) setFs(false);
   document.body.dataset.screen = sc;
   const to = sc === 'app' ? backTo : BACK[sc];
   $('back').textContent = to === 'home' ? '⌂ Accueil' : '← Retour';
   window.scrollTo(0, 0);
+  if (sc === 'library') { buildLibrary(); libRefresh(false); }
 }
 function openMode(m, from = 'home') { backTo = from; setMode(m); goScreen('app'); resize(); }
 document.querySelectorAll('.tile[data-m],.tile[data-go]').forEach(t => t.addEventListener('click', () =>
@@ -896,8 +906,8 @@ function buildSchool() {
   $('lessons').querySelectorAll('.tile').forEach(t => t.addEventListener('click', () => openLesson(+t.dataset.l)));
   buildMine(best);
 }
-function openSong(key, title, hint, buf, bpm) {
-  openMode('practice', 'school');
+function openSong(key, title, hint, buf, bpm, from) {
+  openMode('practice', from || 'school');
   song = parseMidi(buf); curLesson = key;
   $('m1').value = 1; $('m2').value = song.measures; $('bpm').value = bpm; applySettings();
   $('res').textContent = title + ' : ' + hint + ' Appuyez sur Démarrer.';
@@ -934,6 +944,91 @@ function lessonDone(hits, tot) {            // appelée en fin d'entraînement :
   if (p > (b[curLesson] || 0)) { b[curLesson] = p; try { localStorage.setItem('pianoSchool', JSON.stringify(b)); } catch (e) {} buildSchool(); }
 }
 buildSchool();
+
+/* ================= Bibliothèque : fichiers .mid du dossier midi/ du dépôt GitHub =================
+   - la liste vient de l'API GitHub (gardée 1 h en mémoire) ; les fichiers sont lus dans le même site (repli : raw.githubusercontent.com)
+   - étiquettes : etiquettes.json du dépôt (partagé) + modifications locales (prioritaires) + étiquettes automatiques */
+const GH = /\.github\.io$/.test(location.hostname) ? { owner: location.hostname.split('.')[0], repo: location.pathname.split('/')[1] || '' } : { owner: 'maxx27182', repo: 'SolfegeTraining' };
+const LIB_DIR = 'midi';
+const lsGet = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) || d; } catch (e) { return d; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
+const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const norm = t => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+let libFiles = lsGet('pianoLibList', { t: 0, files: [] }).files, libRepoTags = lsGet('pianoLibRepoTags', {}), libSel = new Set(), libShown = [], libChipList = [], libErr = '';
+const libLocal = () => lsGet('pianoLibTags', {}), libAuto = () => lsGet('pianoLibAuto', {});
+const libTitle = n => { const t = n.replace(/\.midi?$/i, '').replace(/[-_]+/g, ' ').trim(); return t.charAt(0).toUpperCase() + t.slice(1); };
+const libUserTags = n => { const l = libLocal(); return n in l ? l[n] : (libRepoTags[n] || []); };
+function libStats(sg) {                                  // analyse : mains (Do central = 60), mesures, armure
+  let lo = 0, hi = 0; sg.steps.forEach(st => st.midis.forEach(m => { if (m < 60) lo++; else hi++; }));
+  return { m: sg.measures, k: sg.key, h: !lo ? 'd' : !hi ? 'g' : '2' };
+}
+const libAutoTags = i => !i ? [] : [i.h === 'd' ? 'main droite' : i.h === 'g' ? 'main gauche' : 'deux mains',
+  i.k ? Math.abs(i.k) + (i.k > 0 ? ' dièse' : ' bémol') + (Math.abs(i.k) > 1 ? 's' : '') : 'sans armure', i.m <= 8 ? 'court' : i.m <= 24 ? 'moyen' : 'long'];
+const libAllTags = n => [...new Set([...libUserTags(n), ...libAutoTags(libAuto()[n])])];
+
+async function libFetch(name) {
+  const e = encodeURIComponent(name);
+  for (const u of [LIB_DIR + '/' + e, 'https://raw.githubusercontent.com/' + GH.owner + '/' + GH.repo + '/HEAD/' + LIB_DIR + '/' + e]) {
+    try { const r = await fetch(u); if (r.ok) return await r.arrayBuffer(); } catch (x) {}
+  }
+  throw new Error('fetch');
+}
+async function libRefresh(force) {
+  const st = lsGet('pianoLibList', { t: 0, files: [] });
+  if (force || Date.now() - st.t > 3600e3 || !st.files.length) {
+    try {
+      const r = await fetch('https://api.github.com/repos/' + GH.owner + '/' + GH.repo + '/contents/' + LIB_DIR);
+      if (!r.ok) throw new Error(r.status);
+      libFiles = (await r.json()).filter(x => x.type === 'file' && /\.midi?$/i.test(x.name)).map(x => x.name).sort((a, b) => a.localeCompare(b, 'fr'));
+      lsSet('pianoLibList', { t: Date.now(), files: libFiles }); libErr = '';
+    } catch (e) { libErr = ' · liste non actualisée (hors ligne, dossier « ' + LIB_DIR + ' » introuvable ou limite GitHub atteinte)'; }
+  }
+  try { const r = await fetch('etiquettes.json'); if (r.ok) { const j = await r.json(); if (j && typeof j === 'object') { libRepoTags = j; lsSet('pianoLibRepoTags', j); } } } catch (e) {}
+  buildLibrary();
+}
+function buildLibrary() {
+  const q = norm($('libQ').value).split(/\s+/).filter(Boolean), best = schoolSave();
+  const rows = libFiles.map(n => ({ n, tags: libAllTags(n), user: libUserTags(n) })), cnt = {};
+  rows.forEach(r => r.tags.forEach(t => { cnt[t] = (cnt[t] || 0) + 1; }));
+  libChipList = Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a] || a.localeCompare(b, 'fr'));
+  libSel.forEach(t => { if (!cnt[t]) libSel.delete(t); });
+  $('libChips').innerHTML = libChipList.map((t, i) => '<button type="button" class="chip' + (libSel.has(t) ? ' on' : '') + '" data-c="' + i + '">' + esc(t) + ' <small>' + cnt[t] + '</small></button>').join('');
+  libShown = rows.filter(r => { const hay = norm(libTitle(r.n) + ' ' + r.tags.join(' ')); return q.every(w => hay.includes(w)) && [...libSel].every(t => r.tags.includes(t)); });
+  $('libList').innerHTML = libShown.length ? '<div class="tiles">' + libShown.map((r, i) => { const b = best['f:' + r.n];
+    return '<div class="mrow"><button class="tile' + (b >= 80 ? ' done' : '') + '" type="button" data-o="' + i + '"><b>' + esc(libTitle(r.n)) + '</b><span>' + esc(r.tags.join(' · ') || 'Pas encore d’étiquette') + (b ? ' · meilleur : ' + b + ' %' : '') + '</span></button>' +
+      '<button class="del" type="button" data-f="' + i + '" aria-label="Favori">' + (r.user.includes('favori') ? '★' : '☆') + '</button><button class="del" type="button" data-e="' + i + '" aria-label="Étiquettes">🏷</button></div>'; }).join('') + '</div>'
+    : '<p>' + (libFiles.length ? 'Aucun morceau ne correspond.' : 'Aucun fichier trouvé : déposez des .mid dans le dossier « ' + LIB_DIR + ' » du dépôt, puis touchez « Actualiser ».') + '</p>';
+  $('libMsg').textContent = libShown.length + ' / ' + libFiles.length + ' morceaux' + libErr;
+}
+async function libOpen(n) {
+  try {
+    const buf = await libFetch(n), sg = parseMidi(buf), A = libAuto(); A[n] = libStats(sg); lsSet('pianoLibAuto', A);
+    openSong('f:' + n, libTitle(n), sg.measures + ' mesures.', buf, Math.min(200, Math.max(40, Math.round(sg.bpm))), 'library');
+  } catch (e) { alert('Impossible d’ouvrir « ' + n + ' » (hors ligne, ou fichier non encore publié ou illisible).'); }
+}
+function libSetTags(n, t) { const l = libLocal(); l[n] = [...new Set(t.map(x => x.trim().toLowerCase()).filter(Boolean))]; lsSet('pianoLibTags', l); buildLibrary(); }
+function libEdit(n) { const v = prompt('Étiquettes de « ' + libTitle(n) + ' » (séparées par des virgules) :', libUserTags(n).join(', ')); if (v !== null) libSetTags(n, v.split(',')); }
+function libFav(n) { const t = libUserTags(n).slice(), i = t.indexOf('favori'); if (i < 0) t.push('favori'); else t.splice(i, 1); libSetTags(n, t); }
+async function libAnalyzeAll() {
+  const A = libAuto(), todo = libFiles.filter(n => !A[n]);
+  if (!todo.length) { $('libMsg').textContent = 'Tous les morceaux sont déjà analysés et gardés hors ligne.'; return; }
+  for (let i = 0; i < todo.length; i++) {
+    $('libMsg').textContent = 'Analyse ' + (i + 1) + ' / ' + todo.length + '…';
+    try { A[todo[i]] = libStats(parseMidi(await libFetch(todo[i]))); lsSet('pianoLibAuto', A); } catch (e) {}
+  }
+  buildLibrary();
+}
+$('libQ').addEventListener('input', buildLibrary);
+$('libChips').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; const t = libChipList[+b.dataset.c]; if (libSel.has(t)) libSel.delete(t); else libSel.add(t); buildLibrary(); });
+$('libList').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; const d = b.dataset;
+  if ('o' in d) libOpen(libShown[+d.o].n); else if ('f' in d) libFav(libShown[+d.f].n); else if ('e' in d) libEdit(libShown[+d.e].n); });
+$('libRefresh').addEventListener('click', () => libRefresh(true));
+$('libAnalyze').addEventListener('click', libAnalyzeAll);
+$('libExport').addEventListener('click', () => {
+  const out = {}, l = libLocal();
+  new Set([...Object.keys(libRepoTags), ...Object.keys(l)]).forEach(n => { const t = n in l ? l[n] : libRepoTags[n]; if (t && t.length) out[n] = t; });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(out, null, 1)], { type: 'application/json' })); a.download = 'etiquettes.json'; a.click();
+});
 
 /* Une note jouée (clavier écran ou piano MIDI) en mode enregistrement / entraînement */
 function noteOn(midi, fromMidi) {
