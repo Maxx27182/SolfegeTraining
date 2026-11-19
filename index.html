@@ -7,7 +7,7 @@
 <meta name="theme-color" content="#ffffff">
 <meta name="mobile-web-app-capable" content="yes">
 <link rel="icon" href="icon-192.png">
-<title>Lecture piano – double portée</title>
+<title>A-ton-clavier</title>
 <style>
   /* ---------- Jetons de couleur (clair / sombre) ---------- */
   :root {
@@ -21,7 +21,7 @@
   html { scroll-padding-top: env(safe-area-inset-top, 0px); }
   body { margin:0; background:var(--bg); color:var(--ink);
     font-family: Georgia, "Times New Roman", serif; }
-  main { max-width: 920px; margin: 0 auto; padding: 16px 12px 28px; }
+  main { max-width: 920px; margin: 0 auto; padding: 4px 12px 28px; }
   h1 { font-size: 1.35rem; margin: 4px 0 12px; font-weight: 600; }
   #wrap { background:var(--card); border:1px solid var(--line); border-radius:6px; }
   canvas { display:block; width:100%; height:240px; }
@@ -43,7 +43,7 @@
     border:1px solid var(--line); border-radius:6px; cursor:pointer; }
   :root[data-theme="dark"] { --bg:#121212; --card:#1c1c1c; --ink:#f2f2f2; --muted:#9a9a9a; --line:#3a3a3a;
     --accent:#ff5a5a; --ok:#6fcf86; --btn:#2a2a2a; color-scheme: dark; }
-  header { display:flex; align-items:center; gap:8px; margin:4px 0 12px; }
+  header { display:flex; align-items:center; gap:8px; margin:0 0 10px; }
   header h1 { flex:1; margin:0; }
   header select, #panel select { padding:6px; font:.9rem system-ui,sans-serif; color:var(--ink); background:var(--btn);
     border:1px solid var(--line); border-radius:6px; }
@@ -54,7 +54,7 @@
     border:1px solid var(--line); border-radius:50%; opacity:.55; cursor:pointer; }
   /* Plein écran : seule la partition reste visible */
   body.fs { overflow:hidden; } body.fs #fsExit { display:block; }
-  body.fs header, body.fs .tools, body.fs #res, body.fs #msg, body.fs #pad, body.fs #kb, body.fs .hint { display:none !important; }
+  body.fs header, body.fs .tools, body.fs #res, body.fs #msg, body.fs #pad, body.fs #kb, body.fs .hint, body.fs .rest, body.fs .pbar { display:none !important; }
   body.fs main { max-width:none; padding:0; box-sizing:border-box; display:flex; flex-direction:column; justify-content:center;
     min-height:calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)); }
   body.fs #wrap { border:none; border-radius:0; }
@@ -65,6 +65,13 @@
     background:var(--btn); border:1px solid var(--line); border-radius:6px; cursor:pointer; }
   .tools input[type=number] { width:56px; padding:5px; color:var(--ink); background:var(--card); border:1px solid var(--line); border-radius:6px; }
   #res { font:.95rem/1.5 system-ui,sans-serif; margin:8px 0; min-height:1.2em; }
+  .rest { text-align:center; margin:12px 0 0; }
+  .rest button, .pbar button { padding:10px 28px; font:600 1.05rem system-ui,sans-serif; color:var(--ink); background:var(--btn);
+    border:1px solid var(--line); border-radius:8px; cursor:pointer; }
+  .pbar { display:flex; flex-direction:column; align-items:center; gap:8px; margin:12px 0 0; font:.95rem system-ui,sans-serif; color:var(--muted); }
+  .pbar input[type=number] { width:56px; padding:5px; color:var(--ink); background:var(--card); border:1px solid var(--line); border-radius:6px; }
+  .tools .pimp { flex:1 1 100%; text-align:center; } .tools .pimp .btn { display:inline-block; }
+  #midiStatus { font:.9rem system-ui,sans-serif; color:var(--muted); }
   #ver { font:.75rem system-ui,sans-serif; color:var(--muted); }
   body:not([data-screen="app"]) main > :not(header):not(.menu) { display:none !important; }
   body[data-screen="home"] #back, .menu { display:none; }
@@ -92,7 +99,8 @@
   .credit { font:.75rem system-ui,sans-serif; color:var(--muted); margin:6px 0; }
   /* En-tête : une seule ligne d'infos sous le titre (portrait) */
   header { flex-wrap:wrap; }
-  header .hinfo { flex:0 0 100%; order:6; margin:0 0 4px; }
+  header .hinfo { flex:0 0 100%; order:6; margin:0 0 4px; justify-content:center; }
+  body:not([data-mode="dictee"]) header .hinfo { display:none; }
   body:not([data-screen="app"]) header .hinfo { display:none; }
   /* Partition + piano centrés verticalement dans l'espace restant */
   body[data-screen="app"] main { display:flex; flex-direction:column; box-sizing:border-box;
@@ -106,9 +114,14 @@
     header #back { order:1; }
     header .hinfo { order:3; flex:0 0 auto; margin:0 auto; flex-wrap:nowrap; gap:6px 10px; white-space:nowrap; font-size:.8rem; }
     header #ver { order:4; } header #gear, header #fs { order:5; }
-    body:not([data-screen="app"]) header #ver { margin-left:auto; }
+    body:not([data-screen="app"]) header #ver, body:not([data-mode="dictee"]) header #ver { margin-left:auto; }
     header .hinfo button { font-size:.8rem; padding:3px 8px; }
-    #midiStatus { max-width:26vw; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:.8rem; }
+    .rest { margin:4px 0 0; } .rest button { padding:4px 18px; }
+    body #kbi, body[data-mode="dictee"] #kb { height:86px; }
+    /* Entraînement en paysage : « Importer un fichier midi » centré dans la ligne du haut, entre Accueil et les boutons de droite */
+    body[data-mode="practice"] .tools { position:absolute; top:calc(env(safe-area-inset-top, 0px) + 4px); left:50%; transform:translateX(-50%); margin:0; }
+    .tools .pimp { flex:0 1 auto; }
+    .pbar { flex-direction:row; justify-content:center; gap:16px; margin:4px 0 0; } .pbar button { padding:5px 22px; }
   }
   .tools label { display:flex; align-items:center; gap:4px; } .tools input[type=range] { width:90px; }
   #panel { display:none; position:fixed; inset:0; z-index:50; align-items:center; justify-content:center; padding:16px; background:rgba(0,0,0,.45); }
@@ -139,7 +152,7 @@
   .wk sub { font-size:.6rem; font-weight:500; color:#6d655a; margin-left:1px; }
   .bk { position:absolute; top:0; height:62%; background:#000; border-radius:0 0 4px 4px; z-index:2; }
   @media (orientation: landscape) {
-    main { padding-top:8px; padding-bottom:12px; }
+    main { padding-top:4px; padding-bottom:12px; }
     h1, .hint, #pad { display:none; }
     #kb { display:block; }
     #msg { margin:4px 0; min-height:1.2em; }
@@ -148,13 +161,11 @@
 </head>
 <body data-screen="home" data-mode="dictee">
 <main>
-  <header><h1>Lecture à vue – piano</h1>
+  <header><button id="back" type="button" aria-label="Retour à l’accueil">⌂ Accueil</button>
+    <h1>A-ton-clavier</h1>
     <span id="ver"></span>
-    <button id="back" type="button" aria-label="Retour à l’accueil">⌂ Accueil</button>
     <div class="hinfo">
-      <span class="dict-only">Vitesse : <b id="sRate">0,0</b> notes/s · <b id="sPace">–</b> s/note</span>
-      <button id="restart" class="dict-only" type="button">Redémarrer</button>
-      <span id="midiStatus">Aucun piano connecté</span></div>
+      <span class="dict-only">Vitesse : <b id="sRate">0,0</b> notes/s · <b id="sPace">–</b> s/note</span></div>
     <button id="fs" type="button" aria-label="Plein écran (partition seule)">⛶</button>
     <button id="gear" type="button" aria-label="Paramètres">⚙︎</button></header>
   <section id="home" class="menu">
@@ -198,11 +209,7 @@
       Ajout : <select id="edIns"><option value="after">après la note</option><option value="with">dans l’accord</option></select>
       <select id="edDur"><option value="0.25">double croche</option><option value="0.5">croche</option><option value="0.75">croche pointée</option><option value="1" selected>noire</option><option value="1.5">noire pointée</option><option value="2">blanche</option><option value="3">blanche pointée</option><option value="4">ronde</option></select>
       <button id="edDone" type="button">Terminer</button></span>
-    <span class="prac-only"><label class="btn">Importer .mid<input type="file" id="file" accept=".mid,.midi" hidden></label>
-      Mesures <input id="m1" type="number" min="1" value="1"> à <input id="m2" type="number" min="1" value="1">
-      <label>Vitesse <input type="range" id="speed" min="20" max="100" step="5" value="100"> <output id="speedVal">100</output> %</label>
-      <label><input type="checkbox" id="wait"> Attendre mes notes</label>
-      <button id="start" type="button">▶ Démarrer</button></span>
+    <span class="prac-only pimp"><label class="btn">Importer un fichier midi<input type="file" id="file" accept=".mid,.midi" hidden></label></span>
   </div>
   <div id="res"></div>
   <section id="library" class="menu"><p class="lead">Bibliothèque : touchez un morceau pour l’ouvrir en entraînement. ☆ = favori, 🏷 = étiquettes.</p>
@@ -214,13 +221,20 @@
     <div id="msg" class="dict-only"></div>
     <div id="pad"></div>
     <div id="kb"></div>
-    <div class="hint">Sous chaque bouton, choisissez la touche du clavier associée (une seule lettre, mémorisée).</div>
+    <div class="rest dict-only"><button id="restart" type="button">Redémarrer</button></div>
+    <div class="prac-only pbar"><button id="start" type="button">▶ Démarrer</button>
+      <label>Mesures <input id="m1" type="number" min="1" value="1"> à <input id="m2" type="number" min="1" value="1"></label></div>
+    <div class="hint dict-only">Sous chaque bouton, choisissez la touche du clavier associée (une seule lettre, mémorisée).</div>
   </div>
 </main>
 <button id="fsExit" type="button" aria-label="Quitter le plein écran">✕</button>
 <div id="panel"><div class="sheet">
   <h2>Paramètres</h2>
   <div class="row"><button id="bleBtn" type="button">Connecter un piano en Bluetooth</button></div>
+  <div class="row"><span id="midiStatus">Aucun piano connecté</span></div>
+  <div class="row prac-only"><span>Vitesse du morceau</span><input type="range" id="speed" min="20" max="100" step="5" value="100" aria-label="Vitesse du morceau"><span style="white-space:nowrap"><output id="speedVal">100</output> %</span></div>
+  <div class="row prac-only"><label><input type="checkbox" id="wait"> Attendre mes notes</label></div>
+  <div class="row prac-only"><label><input type="checkbox" id="loop" checked> Reprendre en boucle à la fin du morceau (ou des mesures choisies)</label></div>
   <div class="row dict-only"><span>Notes de la dictée</span><span><select id="rangeLo" aria-label="Première note"></select> à <select id="rangeHi" aria-label="Dernière note"></select></span></div>
   <div class="row"><label><input type="checkbox" id="metOn"> Métronome</label><span><output id="bpmVal">80</output> bpm</span></div>
   <div class="row"><input type="range" id="bpm" min="20" max="200" value="80" aria-label="Fréquence"></div>
@@ -709,7 +723,7 @@ async function connectBle() {
       + (/Windows/.test(navigator.userAgent) ? '\n\nSous Windows : appairez d’abord le piano dans Paramètres › Bluetooth, puis utilisez le bouton « Piano USB » (Web MIDI).' : ''));
   }
 }
-document.getElementById('bleBtn').addEventListener('click', () => { document.getElementById('panel').classList.remove('open'); connectBle(); });   // le panneau se ferme : l'état s'affiche dans l'en-tête
+document.getElementById('bleBtn').addEventListener('click', () => { connectBle(); });   // le panneau reste ouvert : l'état du piano s'affiche dedans
 
 /* --- Écran toujours allumé (Wake Lock) : redemandé au retour sur la page et au premier toucher --- */
 let wakeLock = null;
@@ -725,7 +739,7 @@ try { navigator.permissions.query({ name: 'midi' }).then(p => { if (p.state !== 
 
 /* ================= Réglages, métronome, modes ================= */
 const $ = id => document.getElementById(id);
-const APP_VERSION = 'v34';          // à garder identique au numéro de cache dans sw.js
+const APP_VERSION = 'v36';          // à garder identique au numéro de cache dans sw.js
 $('ver').textContent = APP_VERSION;
 
 /* --- Intervalle de la dictée : listes Do2 ... Si5 --- */
@@ -742,7 +756,7 @@ function rangeChanged(e) {
 $('rangeLo').addEventListener('change', rangeChanged); $('rangeHi').addEventListener('change', rangeChanged);
 const PCS = [0, 2, 4, 5, 7, 9, 11];
 let mode = 'dictee';
-const SETTINGS = ['metOn', 'bpm', 'metVol', 'metSound', 'theme', 'sound', 'strictOct', 'octs', 'hideNames', 'showDur', 'keySig', 'recBpm', 'recTs', 'quant', 'realPiano', 'rangeLo', 'rangeHi', 'hilite'];
+const SETTINGS = ['metOn', 'bpm', 'metVol', 'metSound', 'theme', 'sound', 'strictOct', 'octs', 'hideNames', 'showDur', 'keySig', 'recBpm', 'recTs', 'quant', 'realPiano', 'rangeLo', 'rangeHi', 'hilite', 'loop'];
 
 /* --- Réglages sauvegardés dans localStorage --- */
 function saveSettings() {
@@ -800,7 +814,7 @@ let recNotes = [], openN = {}, t0rec = 0, pr = null, song = null, recOn = false;
 function setMode(m) {
   mode = m; document.body.dataset.mode = m;
   if (document.body.classList.contains('fs')) setFs(false);
-  recNotes = []; openN = {}; pr = null; curLesson = null; $('res').textContent = '';
+  recNotes = []; openN = {}; pr = null; curLesson = null; $('res').textContent = ''; clearTimeout(loopT); $('start').textContent = '▶ Démarrer';
   recOn = false; $('recBtn').textContent = '● Enregistrer'; if (m === 'record') $('res').textContent = 'Appuyez sur « Enregistrer », puis jouez.';
   if (m === 'dictee') restart();
   buildKeyboard();
@@ -1001,10 +1015,11 @@ function buildLibrary() {
   $('libMsg').textContent = libShown.length + ' / ' + libFiles.length + ' morceaux' + libErr;
 }
 async function libOpen(n) {
-  try {
-    const buf = await libFetch(n), sg = parseMidi(buf), A = libAuto(); A[n] = libStats(sg); lsSet('pianoLibAuto', A);
-    openSong('f:' + n, libTitle(n), sg.measures + ' mesures.', buf, Math.min(200, Math.max(40, Math.round(sg.bpm))), 'library');
-  } catch (e) { alert('Impossible d’ouvrir « ' + n + ' » (hors ligne, ou fichier non encore publié ou illisible).'); }
+  let buf, sg;
+  try { buf = await libFetch(n); } catch (e) { alert('Impossible de télécharger « ' + n + ' » : hors ligne, ou fichier pas encore publié sur GitHub (attendez environ une minute).'); return; }
+  try { sg = parseMidi(buf); } catch (e) { alert('« ' + n + ' » a été téléchargé, mais ce fichier MIDI est illisible.'); return; }
+  const A = libAuto(); A[n] = libStats(sg); lsSet('pianoLibAuto', A);
+  openSong('f:' + n, libTitle(n), sg.measures + ' mesures.', buf, Math.min(200, Math.max(40, Math.round(sg.bpm))), 'library');
 }
 function libSetTags(n, t) { const l = libLocal(); l[n] = [...new Set(t.map(x => x.trim().toLowerCase()).filter(Boolean))]; lsSet('pianoLibTags', l); buildLibrary(); }
 function libEdit(n) { const v = prompt('Étiquettes de « ' + libTitle(n) + ' » (séparées par des virgules) :', libUserTags(n).join(', ')); if (v !== null) libSetTags(n, v.split(',')); }
@@ -1433,7 +1448,9 @@ $('file').addEventListener('change', async e => {
 });
 
 /* --- Entraînement : les notes défilent, on les joue en rythme --- */
-function startPractice() {
+let loopT = null;
+function startPractice(again) {
+  clearTimeout(loopT);
   if (!song) { $('res').textContent = 'Importez d’abord un fichier .mid.'; return; }
   const m1 = Math.max(1, +$('m1').value || 1), m2 = Math.min(song.measures, Math.max(m1, +$('m2').value || song.measures));
   const steps = song.steps.filter(s => { const m = Math.floor(s.tick / song.tpm) + 1; return m >= m1 && m <= m2; })
@@ -1447,9 +1464,11 @@ function startPractice() {
   const tick0 = (m1 - 1) * song.tpm - 2 * song.tpq;       // décompte de 2 temps
   pr = { steps, tpq: song.tpq, tpm: song.tpm, bpm, wait: $('wait').checked, m1, m2, tick0, cur: tick0,
          end: m2 * song.tpm, hits: 0, wrong: 0, deltas: [], over: false };
-  $('res').textContent = ''; startMet();
+  if (again !== true) $('res').textContent = '';      // en boucle : le résultat du dernier passage reste affiché
+  $('start').textContent = '■ Arrêter'; startMet();
 }
-$('start').addEventListener('click', startPractice);
+function stopPractice() { clearTimeout(loopT); pr = null; $('start').textContent = '▶ Démarrer'; }
+$('start').addEventListener('click', () => { if (pr && !pr.over || loopT) stopPractice(); else startPractice(); });
 $('speed').addEventListener('input', e => { $('speedVal').textContent = e.target.value; });
 const CHORD_MS = 150;     // les notes d'un accord doivent être jouées à moins de 150 ms de la première
 function updatePractice(dt) {
@@ -1491,6 +1510,12 @@ function finishPractice() {
     'Dans le rythme (±100 ms) : <b>' + (n ? Math.round(100 * d.filter(x => Math.abs(x) < 100).length / n) : 0) + ' %</b>';
   if (pr.wait) $('res').innerHTML = 'Notes justes : <b>' + pr.hits + '/' + tot + '</b> · fausses notes : <b>' + pr.wrong + '</b><br>(mode attente : pas de statistique de rythme)';
   lessonDone(pr.hits, tot);
+  if ($('loop').checked && mode === 'practice') {            // reprise automatique au début de la plage, après une courte pause
+    const me = pr; clearTimeout(loopT);
+    loopT = setTimeout(() => { loopT = null; if (pr === me && pr.over && $('loop').checked && mode === 'practice') startPractice(true); }, 2000);
+    return;
+  }
+  $('start').textContent = '▶ Démarrer';
   if (document.body.classList.contains('fs')) setFs(false);   // pour voir le résultat
 }
 
