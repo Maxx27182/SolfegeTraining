@@ -70,6 +70,7 @@
     border:1px solid var(--line); border-radius:8px; cursor:pointer; }
   .pbar { display:flex; flex-direction:column; align-items:center; gap:8px; margin:12px 0 0; font:.95rem system-ui,sans-serif; color:var(--muted); }
   .pbar input[type=number] { width:56px; padding:5px; color:var(--ink); background:var(--card); border:1px solid var(--line); border-radius:6px; }
+  body[data-mode="practice"] #cv { touch-action:none; cursor:grab; }
   .tools .pimp { flex:1 1 100%; text-align:center; } .tools .pimp .btn { display:inline-block; }
   #midiStatus { font:.9rem system-ui,sans-serif; color:var(--muted); }
   #ver { font:.75rem system-ui,sans-serif; color:var(--muted); }
@@ -739,7 +740,7 @@ try { navigator.permissions.query({ name: 'midi' }).then(p => { if (p.state !== 
 
 /* ================= Réglages, métronome, modes ================= */
 const $ = id => document.getElementById(id);
-const APP_VERSION = 'v36';          // à garder identique au numéro de cache dans sw.js
+const APP_VERSION = 'v37';          // à garder identique au numéro de cache dans sw.js
 $('ver').textContent = APP_VERSION;
 
 /* --- Intervalle de la dictée : listes Do2 ... Si5 --- */
@@ -1470,9 +1471,42 @@ function startPractice(again) {
 function stopPractice() { clearTimeout(loopT); pr = null; $('start').textContent = '▶ Démarrer'; }
 $('start').addEventListener('click', () => { if (pr && !pr.over || loopT) stopPractice(); else startPractice(); });
 $('speed').addEventListener('input', e => { $('speedVal').textContent = e.target.value; });
+/* Glisser le doigt sur la partition : elle suit le doigt (dans les deux sens) ; au relâchement, le défilement reprend à cet endroit */
+function uToTick(u) {                                      // inverse de tickToU
+  const st = pr.steps, n = st.length;
+  if (u <= st[0].X) return st[0].tick - (st[0].X - u) / 11.5 * pr.tpq;
+  if (u >= st[n - 1].X) return st[n - 1].tick + (u - st[n - 1].X) / 11.5 * pr.tpq;
+  let lo = 0, hi = n - 1;
+  while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (st[mid].X <= u) lo = mid; else hi = mid; }
+  return st[lo].tick + (u - st[lo].X) / (st[hi].X - st[lo].X) * (st[hi].tick - st[lo].tick);
+}
+let drag = null;
+cv.addEventListener('pointerdown', e => {
+  if (mode !== 'practice' || !pr || pr.over) return;
+  drag = { id: e.pointerId, x0: e.clientX, u0: tickToU(pr.cur), pr };
+  pr.drag = true; cv.setPointerCapture(e.pointerId);
+});
+cv.addEventListener('pointermove', e => {
+  if (!drag || e.pointerId !== drag.id) return;
+  if (pr !== drag.pr) { drag = null; return; }
+  const t = uToTick(drag.u0 - (e.clientX - drag.x0) / H);   // doigt vers la droite = on revient en arrière
+  pr.cur = Math.min(pr.end, Math.max(pr.tick0, t));
+});
+function endDrag(e) {
+  if (!drag || e.pointerId !== drag.id) return;
+  const d = drag; drag = null; d.pr.drag = false;
+  if (pr !== d.pr) return;
+  const lim = pr.cur - pr.tpq * 0.5;                        // notes derrière la nouvelle position : sautées ; devant : à rejouer
+  pr.steps.forEach(s => {
+    if (s.tick >= lim) { s.done = false; s.missed = false; s.got = []; s.tFirst = undefined; }
+    else if (!s.done) { s.missed = true; if (pr.wait) s.done = true; }
+  });
+  pr.hits = pr.steps.reduce((a, s) => a + s.got.length, 0);
+}
+cv.addEventListener('pointerup', endDrag); cv.addEventListener('pointercancel', endDrag);
 const CHORD_MS = 150;     // les notes d'un accord doivent être jouées à moins de 150 ms de la première
 function updatePractice(dt) {
-  if (!pr || pr.over) return;
+  if (!pr || pr.over || pr.drag) return;       // pendant un glissement du doigt, la partition est figée
   let adv = dt * pr.bpm / 60 * pr.tpq;                     // avancement de l'horloge musicale, en ticks
   if (pr.wait) {                                           // mode attente : arrêt sur la première note non jouée
     const s = pr.steps.find(s => !s.done);
@@ -1484,7 +1518,7 @@ function updatePractice(dt) {
 }
 function practiceHit(midi, now) {
   now = now || performance.now();
-  if (!pr || pr.over) return;
+  if (!pr || pr.over || pr.drag) return;
   const w = pr.tpq * 0.5;
   const s = pr.wait ? pr.steps.find(s => !s.done)          // attente : seule la prochaine note compte
     : pr.steps.find(s => !s.done && !s.missed && s.midis.includes(midi) && !s.got.includes(midi) && Math.abs(pr.cur - s.tick) <= w);
